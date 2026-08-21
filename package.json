@@ -3,7 +3,7 @@
   "displayName": "AuspexLens",
   "description": "A native, lightweight Oracle Database client for VS Code.",
   "publisher": "lensql",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -24,7 +24,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "node -e \"console.error('Do not package from inside the workspace: vsce follows npm\\\\'s hoisted node_modules and packages the whole monorepo. Use scripts/package-extension.sh.'); process.exit(1)\""
+    "package": "node -e \"console.error('Do not package from inside the workspace: vsce follows npm\\\\'s hoisted node_modules and packages the whole monorepo. Use scripts/package-extension.sh.'); process.exit(1)\"",
+    "shots": "node esbuild.integration.mjs && node out-integration/runShots.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -34,6 +35,7 @@
     "@types/node": "^20.14.0",
     "@types/oracledb": "^7.0.2",
     "@types/vscode": "1.102.0",
+    "@vscode/test-electron": "^2.4.1",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
@@ -111,7 +113,7 @@
         "auspexlens.connections.profiles": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Connection profiles. **Passwords and wallets are never stored here** \u2014 they go to your OS keychain through VS Code SecretStorage. See `AuspexLens: Connect`.",
+          "markdownDescription": "Connection profiles. **Passwords and wallets are never stored here** — they go to your OS keychain through VS Code SecretStorage. See `AuspexLens: Connect`.",
           "items": {
             "type": "object",
             "required": [

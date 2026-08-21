@@ -1,0 +1,35 @@
+# CI for the free AuspexLens extension.
+#
+# Free-only by construction: this repository contains no paid code, so there is
+# nothing here that needs a licence, a secret or an Oracle account. Anyone's
+# fork gets the same green run, which is the point of opening it.
+#
+# The Oracle-backed live suite skips itself — loudly — when no database is
+# reachable, so this run proves the engine's logic, the guards and the build,
+# not the wire protocol. The wire runs against a real Oracle on every gate in
+# the private repo (scripts/mac/test.sh).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # The packaging surface is only as good as the last time someone asked
+      # vsce. This is the authoritative check the tests can only approximate.
+      - name: Verify what the .vsix would contain
+        run: npx @vscode/vsce ls

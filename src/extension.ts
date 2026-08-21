@@ -105,7 +105,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       vscode.env.openExternal(vscode.Uri.parse(DOCS_URL)),
     ),
 
-    vscode.commands.registerCommand('auspexlens.connect', async () => {
+    vscode.commands.registerCommand('auspexlens.connect', async (profileId?: unknown) => {
       const list = profiles();
       if (list.length === 0) {
         vscode.window.showInformationMessage(
@@ -114,19 +114,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
         );
         return;
       }
-      const picked = await vscode.window.showQuickPick(
-        list.map((p) => ({ label: p.label, description: `${p.user}@${p.connectString}`, profile: p })),
-        { title: 'AuspexLens: connect' },
-      );
+      // The optional argument is the programmatic path: the screenshot suite and
+      // future automation pass a profile id, because a harness cannot answer a
+      // QuickPick. A human invoking the palette passes nothing and gets the
+      // picker exactly as before. Same pattern as RedLens's connectToProfile.
+      const preset = typeof profileId === 'string' ? list.find((p) => p.id === profileId) : undefined;
+      if (typeof profileId === 'string' && !preset) {
+        vscode.window.showErrorMessage(`No connection profile with id “${profileId}”.`);
+        return;
+      }
+      const picked = preset
+        ? { profile: preset }
+        : await vscode.window.showQuickPick(
+            list.map((p) => ({ label: p.label, description: `${p.user}@${p.connectString}`, profile: p })),
+            { title: 'AuspexLens: connect' },
+          );
       if (!picked) return;
 
       if (!(await credentials.has(picked.profile.id, 'password'))) {
-        const password = await vscode.window.showInputBox({
-          title: `Password for ${picked.profile.user}@${picked.profile.connectString}`,
-          password: true,
-          ignoreFocusOut: true,
-          prompt: 'Stored in your OS keychain via VS Code SecretStorage — never in settings.json.',
-        });
+        // Test mode only, and structurally unreachable anywhere else: VS Code
+        // sets `extensionMode` to Test exclusively when a test runner launched
+        // this host — the one place a password prompt has nobody to answer it.
+        // The value arrives through the environment, never argv, so `ps` on a
+        // shared machine cannot see it; and it goes through the same
+        // CredentialStore as a typed one, so no second read path exists (T7).
+        const seeded =
+          context.extensionMode === vscode.ExtensionMode.Test
+            ? process.env.AUSPEXLENS_TEST_PASSWORD
+            : undefined;
+        const password =
+          seeded ??
+          (await vscode.window.showInputBox({
+            title: `Password for ${picked.profile.user}@${picked.profile.connectString}`,
+            password: true,
+            ignoreFocusOut: true,
+            prompt: 'Stored in your OS keychain via VS Code SecretStorage — never in settings.json.',
+          }));
         if (password === undefined) return;
         await credentials.put(picked.profile.id, 'password', password);
       }
