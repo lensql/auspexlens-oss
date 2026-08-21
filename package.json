@@ -1,0 +1,219 @@
+{
+  "name": "auspexlens",
+  "displayName": "AuspexLens",
+  "description": "A native, lightweight Oracle Database client for VS Code.",
+  "publisher": "lensql",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lensql/auspexlens-oss"
+  },
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Data Science",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "node -e \"console.error('Do not package from inside the workspace: vsce follows npm\\\\'s hoisted node_modules and packages the whole monorepo. Use scripts/package-extension.sh.'); process.exit(1)\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "oracledb": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/oracledb": "^7.0.2",
+    "@types/vscode": "1.102.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "activationEvents": [
+    "onLanguage:sql",
+    "onLanguage:plsql"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "auspexlens.connect",
+        "title": "AuspexLens: Connect",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "auspexlens.disconnect",
+        "title": "AuspexLens: Disconnect"
+      },
+      {
+        "command": "auspexlens.runQuery",
+        "title": "AuspexLens: Run query",
+        "icon": "$(play)"
+      },
+      {
+        "command": "auspexlens.explainQuery",
+        "title": "AuspexLens: Explain plan"
+      },
+      {
+        "command": "auspexlens.findObject",
+        "title": "AuspexLens: Find database object",
+        "icon": "$(search)"
+      },
+      {
+        "command": "auspexlens.openSource",
+        "title": "AuspexLens: Open source"
+      },
+      {
+        "command": "auspexlens.forgetCredentials",
+        "title": "AuspexLens: Forget stored credentials for a connection"
+      },
+      {
+        "command": "auspexlens.showDocs",
+        "title": "AuspexLens: Open documentation"
+      }
+    ],
+    "configuration": {
+      "title": "AuspexLens",
+      "properties": {
+        "auspexlens.readOnly.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refuse any statement that is not read-only. Oracle's own SET TRANSACTION READ ONLY does not block DDL, TRUNCATE, DROP, GRANT or autonomous-transaction PL/SQL, so this guard is what stops them."
+        },
+        "auspexlens.pii.mode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "named",
+            "all"
+          ],
+          "default": "named",
+          "description": "Mask personal data in the engine, before results reach the grid, an export, or the MCP server. 'named' masks columns whose name indicates personal data."
+        },
+        "auspexlens.results.maxRows": {
+          "type": "number",
+          "default": 5000,
+          "description": "Maximum rows fetched for a single query."
+        },
+        "auspexlens.tls.rejectUnauthorized": {
+          "type": "boolean",
+          "default": true,
+          "description": "Verify the database server's TLS certificate. Turning this off exposes the connection to interception and is recorded as residual risk in the security architecture."
+        },
+        "auspexlens.connections.profiles": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Connection profiles. **Passwords and wallets are never stored here** \u2014 they go to your OS keychain through VS Code SecretStorage. See `AuspexLens: Connect`.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "user",
+              "connectString",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Stable identifier. No spaces or colons."
+              },
+              "label": {
+                "type": "string"
+              },
+              "user": {
+                "type": "string"
+              },
+              "connectString": {
+                "type": "string",
+                "description": "host:port/service, or a TNS alias when kind is 'wallet'."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "basic",
+                  "wallet"
+                ],
+                "default": "basic"
+              },
+              "configDir": {
+                "type": "string",
+                "description": "Directory containing tnsnames.ora. Wallet profiles only."
+              },
+              "rejectUnauthorized": {
+                "type": "boolean",
+                "default": true,
+                "description": "Verify the server's TLS certificate."
+              }
+            }
+          }
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "auspexlens",
+          "title": "AuspexLens",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "auspexlens": [
+        {
+          "id": "auspexlens.explorer",
+          "name": "Database",
+          "contextualTitle": "AuspexLens"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "auspexlens.connect",
+          "when": "view == auspexlens.explorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "auspexlens.findObject",
+          "when": "view == auspexlens.explorer",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "auspexlens.runQuery",
+          "when": "editorLangId == sql || editorLangId == plsql",
+          "group": "auspexlens@1"
+        },
+        {
+          "command": "auspexlens.explainQuery",
+          "when": "editorLangId == sql || editorLangId == plsql",
+          "group": "auspexlens@2"
+        }
+      ]
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "auspexlens.mcp",
+        "label": "AuspexLens (Oracle, read-only)"
+      }
+    ]
+  },
+  "keywords": [
+    "oracle",
+    "plsql",
+    "sql",
+    "database",
+    "mcp"
+  ]
+}

@@ -1,0 +1,31 @@
+# Allowlist, not denylist.
+#
+# RedLens's denylist failed exactly the way denylists fail: `vsce ls` showed the
+# package would ship personal email addresses, lab hostnames, the built test
+# harness and raw TypeScript. Every new folder in the repo would have had to be
+# remembered here, forever, by someone who was not thinking about packaging.
+#
+# So: exclude everything, then add back only what is loaded at runtime. A new
+# folder is invisible to the package by default, which is the only default that
+# fails safe.
+#
+# Verify after ANY change with:  npx @vscode/vsce ls
+# And after packaging:           scripts/ci/audit-vsix.sh base <vsix>
+
+**
+
+# --- required by the Marketplace ---
+!package.json
+!README.md
+!LICENSE.md
+!CHANGELOG.md
+!NOTICES.md
+
+# --- loaded at runtime ---
+# Named precisely, NEVER with a folder wildcard. In vsce a `!` rule beats every
+# exclusion regardless of order, so `!dist/**` would re-include source maps
+# permanently and no later line could take them back out. A .map re-exposes the
+# entire source; for the paid half that is the whole of the protection.
+!dist/extension.js
+!dist/mcp-server.js
+!media/icon.png
