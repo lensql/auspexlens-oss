@@ -6,6 +6,8 @@ you can point a language model at without handing it your production database.
 
 > *Auspex*: the Roman augur who read the signs before anyone acted on them.
 
+![AuspexLens in use: the schema in the explorer, a real query in the results grid, the same grid masking personal data, the text execution plan, and the Pro visual plan with cost hotspots](https://lensql.dev/img/listing/auspexlens/hero.gif)
+
 **This is the free half, and it is MIT.** Source:
 https://github.com/lensql/auspexlens-oss
 
@@ -25,13 +27,17 @@ Everything you need to actually work with an Oracle database:
   connection has more privilege than the work needs.
 - **A read-only MCP server** for language models.
 
+![The AuspexLens explorer: the schema expanded to its tables, with views, packages, procedures and triggers below](https://lensql.dev/img/listing/auspexlens/explorer.png)
+
+![A join running against a real database: twelve invoices with customer names in the results grid, with the name column masked](https://lensql.dev/img/listing/auspexlens/results-grid.png)
+
 The free/paid line is written in one public file —
 [`src/licensing/tiers.ts`](https://github.com/lensql/auspexlens-oss/blob/main/src/licensing/tiers.ts)
 — so you can read it rather than take our word for it.
 
-**AuspexLens Pro** (`lensql.auspexlens-pro`) adds visual explain plans with plan
-diff, a session/lock/blocking-tree monitor, query and table advisors, and
-activity dashboards. Details: https://lensql.dev/auspexlens/pricing
+**AuspexLens Pro** (`lensql.auspexlens-pro`) adds visual explain plans with
+cost-hotspot analysis and advisors, a session monitor, a blocking tree and Top
+SQL. Details: https://lensql.dev/auspexlens/pricing
 
 ## Read-only actually means read-only
 
@@ -49,6 +55,23 @@ So AuspexLens does three things instead of one:
    survive anything.
 3. It tells you when your connection is more privileged than it needs to be —
    because least privilege is the layer that actually held in testing.
+
+![The guard refusing DROP TABLE in read-only mode, naming the reason: DROP is DDL, which Oracle's read-only transaction does not block](https://lensql.dev/img/listing/auspexlens/readonly-guard.png)
+
+With read-only off, risky statements explain themselves before they run — and
+`DROP`/`TRUNCATE` ask you to **type the object's name**, because the mistake
+that actually happens is the right statement against the wrong object:
+
+![The typed-name confirmation for DROP: the dialog quotes Oracle's implicit-commit behaviour and asks you to type DEMO_INVOICES to proceed](https://lensql.dev/img/listing/auspexlens/risk-typed-confirm.png)
+
+![The over-privilege warning in the notification center: this account can create objects, so the guard is the only thing preventing a destructive statement](https://lensql.dev/img/listing/auspexlens/overprivilege-warning.png)
+
+PII masking happens in the engine, before results reach the grid, exports or
+the MCP server:
+
+![A query over customers with email, phone and tax id masked in the grid, marked "4 columns masked"](https://lensql.dev/img/listing/auspexlens/pii-masking.png)
+
+![The free text explain plan: DBMS_XPLAN output for a hash join, with predicate information](https://lensql.dev/img/listing/auspexlens/explain-text.png)
 
 ## What it does not do, on purpose
 
