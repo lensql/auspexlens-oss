@@ -14,3 +14,14 @@ _site/
 docs/listing/raw/
 build/
 out-integration/
+
+# Alternative C of PLAN.md §E.1: the throwaway PKI that makes the compatibility
+# container speak TCPS and demand a client certificate. Two CAs, a server key, a
+# client key, three wallets and a PKCS#12, regenerated from scratch by
+# scripts/tls/make-pki.sh on every run of scripts/mac/tls-test.sh.
+#
+# This line is a default, not the control. packages/base is mirrored to a PUBLIC
+# repository, so the control is scripts/ci/crypto-material-guard.sh, which fails
+# the release if anything matching key material is TRACKED — including something
+# added with `git add -f`, which walks straight past this file.
+e2e/tls/

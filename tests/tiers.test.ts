@@ -37,4 +37,20 @@ describe('the free/paid boundary', () => {
   it('an unknown id is out of scope rather than accidentally free', () => {
     expect(tierOf('something.invented')).toBe('out-of-scope');
   });
+
+  it('does not advertise wallet connections while no user can reach them', () => {
+    // 0.1.0 and 0.1.1 listed connect.wallet as free. The engine really does speak
+    // wallet mTLS — but nothing puts a wallet into SecretStorage, so the listing
+    // promised something unreachable. This moves back to 'free' in the same
+    // change that ships the import command, and not before.
+    expect(tierOf('connect.wallet')).toBe('out-of-scope');
+    expect(CAPABILITIES.some((c) => c.id === 'connect.wallet')).toBe(false);
+  });
+
+  it('promises reconnection only because the manager implements it', () => {
+    // Paired with manager.test.ts and the live kill-session case. A capability
+    // listed here is a promise to a paying market, so the test that pins the
+    // promise and the test that pins the behaviour reference each other.
+    expect(tierOf('connect.reconnect')).toBe('free');
+  });
 });

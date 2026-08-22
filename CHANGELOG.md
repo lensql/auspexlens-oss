@@ -3,6 +3,40 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [0.1.2] - 2026-08-22
+
+Validating against a real Oracle — a managed 19c on AWS RDS, and a container
+converted into a TCPS server that demands a client certificate — turned up four
+defects. Three were the driver's; this release is what changed on our side.
+
+- **Reconnection now exists.** The README has promised it since 0.1.0 and the
+  connection manager did not do it: it cached the connection and handed back the
+  same dead one for ever. Measured by killing a real session. Now the start of
+  every operation notices a dropped connection and reopens it, and the statement
+  you ran goes through. A connection that dies *mid-statement* still reports the
+  failure rather than silently re-running it — retrying there would send the
+  statement on a fresh connection that is not inside the read-only transaction,
+  which is the one thing this product must never do.
+- **The over-privilege warning was firing on everybody.** `probePrivileges` asked
+  "did the query run?" for a question whose query runs for every user and simply
+  returns no rows, so every connection was reported as able to create objects —
+  including the least-privileged account there is. A warning that fires always is
+  a warning nobody reads. It now asks whether a row came back, and ignores
+  `CREATE SESSION`, which everyone has by definition.
+- **`auspexlens.tls.rejectUnauthorized` no longer pretends.** In thin mode the
+  Oracle driver always verifies the server's certificate and offers no way to
+  stop it — the parameter this setting used to send does not exist and was
+  silently discarded. Setting it to `false` is now refused with an explanation,
+  and the explanation names what actually works: point `NODE_EXTRA_CA_CERTS` at
+  your CA's PEM file to trust a private or self-signed authority. The transport
+  was always safer than the setting implied; only the promise was wrong.
+- **Wallet connections are no longer listed as a feature.** The engine speaks
+  wallet mTLS and it is now proven against a server that demands a client
+  certificate — but no command in the extension ever stored a wallet, so no user
+  could reach it, and the error you got pointed at an import that was never
+  built. It is out of scope in `tiers.ts` until the import command ships, rather
+  than advertised and unreachable.
+
 ## [0.1.1] - 2026-08-22
 
 - The Marketplace listing now has its icon. 0.1.0 shipped a 1×1-pixel

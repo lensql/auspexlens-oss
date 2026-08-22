@@ -29,17 +29,42 @@ export interface Privileges {
 }
 
 export interface ProbeCapableConnection {
-  execute(sql: string, binds?: unknown, options?: Record<string, unknown>): Promise<unknown>;
+  execute(
+    sql: string,
+    binds?: unknown,
+    options?: Record<string, unknown>,
+  ): Promise<{ rows?: unknown[][] }>;
 }
 
+/**
+ * Can this connection RUN the statement at all?
+ *
+ * For the two catalog questions that is the whole question: a connection without
+ * the privilege cannot even parse `SELECT … FROM v$session`, so ORA-00942 is the
+ * answer rather than an error. This is the one place a swallowed exception is
+ * correct.
+ *
+ * It is NOT the right question for anything that reads a privilege out of a view
+ * every user can read — see `hasRow`, and the paragraph on `canCreate` that
+ * explains why the difference cost this product a warning that fired on
+ * everybody.
+ */
 async function can(conn: ProbeCapableConnection, sql: string): Promise<boolean> {
   try {
     await conn.execute(sql);
     return true;
   } catch {
-    // A refusal is the answer, not an error. This is the ONE place a swallowed
-    // exception is correct: the probe's whole purpose is to find out whether the
-    // statement is permitted, and ORA-00942 / ORA-01031 are that answer.
+    return false;
+  }
+}
+
+/** Did the statement come back with at least one row? A query that runs and
+ *  returns nothing is an ANSWER OF NO, and `can` cannot tell the two apart. */
+async function hasRow(conn: ProbeCapableConnection, sql: string): Promise<boolean> {
+  try {
+    const result = await conn.execute(sql);
+    return (result?.rows?.length ?? 0) > 0;
+  } catch {
     return false;
   }
 }
@@ -47,16 +72,37 @@ async function can(conn: ProbeCapableConnection, sql: string): Promise<boolean> 
 export async function probePrivileges(conn: ProbeCapableConnection): Promise<Privileges> {
   const catalog = await can(conn, 'SELECT 1 FROM all_tables WHERE ROWNUM = 1');
   const performanceViews = await can(conn, 'SELECT 1 FROM v$session WHERE ROWNUM = 1');
-  // Asked without creating anything: USER_SYS_PRIVS is readable by every user
-  // about itself, and the roles view covers privileges arriving through a role.
-  const canCreate = await can(
+  // WHY THIS ASKS FOR A ROW AND NOT FOR SUCCESS.
+  //
+  // Until 2026-08-22 this went through `can`, which answers "did the statement
+  // run". Both catalog questions above are privilege questions where that is the
+  // same thing: without the grant the statement does not parse. This one is not.
+  // `user_sys_privs` is readable by every user about itself, so
+  // `SELECT 1 FROM dual WHERE EXISTS (…)` ALWAYS runs — and returns no rows when
+  // the answer is no. `canCreate` was therefore `true` for every connection that
+  // ever used this product, and `privilegeAdvice` showed "this account can create
+  // objects" to everybody, including the least-privileged account there is. A
+  // warning that fires on every connection is a warning nobody reads, and then
+  // neither is the one that mattered.
+  //
+  // It survived because nothing here had ever seen an account with no privileges:
+  // the container's app user has CREATE TABLE. It was caught on AWS RDS
+  // (PLAN.md §E.1, alternative A), where such an account had to be made by hand.
+  //
+  // CREATE SESSION is excluded for the same reason the shape of the question
+  // matters: every connection has it — it is what being able to log in is called —
+  // and it matches `CREATE %`. It is the only `CREATE %` privilege that does not
+  // create a schema object; CREATE ANY TABLE and CREATE PUBLIC SYNONYM are DDL and
+  // belong in the warning.
+  const canCreate = await hasRow(
     conn,
     `SELECT 1 FROM dual WHERE EXISTS (
-       SELECT 1 FROM user_sys_privs WHERE privilege LIKE 'CREATE %'
+       SELECT 1 FROM user_sys_privs WHERE privilege LIKE 'CREATE %' AND privilege != 'CREATE SESSION'
        UNION ALL
-       SELECT 1 FROM role_sys_privs WHERE privilege LIKE 'CREATE %'
+       SELECT 1 FROM role_sys_privs WHERE privilege LIKE 'CREATE %' AND privilege != 'CREATE SESSION'
      )`,
   );
+
   return { catalog, performanceViews, canCreate };
 }
 

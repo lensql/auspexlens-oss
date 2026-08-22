@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "A native, lightweight Oracle Database client for VS Code.",
   "publisher": "lensql",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -109,7 +109,7 @@
         "auspexlens.tls.rejectUnauthorized": {
           "type": "boolean",
           "default": true,
-          "description": "Verify the database server's TLS certificate. Turning this off exposes the connection to interception and is recorded as residual risk in the security architecture."
+          "description": "Verify the database server's TLS certificate. This can only be true: AuspexLens connects in thin mode, where the Oracle driver always verifies and cannot be told not to. Setting it to false is refused with an explanation rather than ignored. To trust a private or self-signed CA, point NODE_EXTRA_CA_CERTS at its PEM file instead."
         },
         "auspexlens.connections.profiles": {
           "type": "array",
@@ -154,7 +154,7 @@
               "rejectUnauthorized": {
                 "type": "boolean",
                 "default": true,
-                "description": "Verify the server's TLS certificate."
+                "description": "Verify the server's TLS certificate. Can only be true — thin mode always verifies. Use NODE_EXTRA_CA_CERTS to trust a private CA."
               }
             }
           }

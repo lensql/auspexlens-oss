@@ -61,9 +61,11 @@ export type Credentials = BasicCredentials | WalletCredentials;
 export interface ConnectionOptions {
   credentials: Credentials;
   /**
-   * TLS verification. Default true, and the escape hatch is named for what it
-   * actually does rather than something soothing. If it is ever set, that fact
-   * belongs in the security document's residual-risk section, not in a tooltip.
+   * TLS verification. It can only ever be true.
+   *
+   * This started life as an escape hatch and turned out not to be one: see
+   * `buildConnectConfig`. Setting it to false is refused with an explanation
+   * rather than silently ignored.
    */
   rejectUnauthorized?: boolean;
 }
@@ -89,9 +91,32 @@ export function buildConnectConfig(options: ConnectionOptions): Record<string, u
     base['walletPassword'] = c.walletPassword;
   }
 
-  // Explicit rather than relying on the driver's default: a default that changes
-  // in a minor release would silently downgrade every user's transport.
-  base['sslVerifyCertificate'] = options.rejectUnauthorized !== false;
+  // WHY THERE IS NO `sslVerifyCertificate` HERE ANY MORE.
+  //
+  // Until 0.1.2 this line set `sslVerifyCertificate` from `rejectUnauthorized`,
+  // on the reasonable-sounding grounds that being explicit beats relying on a
+  // driver default. Measured against node-oracledb 7.0.1 on 2026-08-22
+  // (docs/RESEARCH.md §17.9): **there is no such parameter.** It appears nowhere
+  // in the driver's `lib/` and nowhere in `@types/oracledb`, and `getConnection`
+  // accepts and discards any property it does not recognise — verified by handing
+  // it a deliberately invented one. Thin mode passes `rejectUnauthorized: true`
+  // to Node's TLS as a literal, in the initial handshake and again in the
+  // renegotiation after the listener hands off (`thin/sqlnet/ntTcp.js`).
+  //
+  // So the transport is SAFER than the setting implied, and the setting was a
+  // promise the product could not keep. Sending a parameter the driver throws
+  // away is not "explicit"; it is a comment that looks like code.
+  if (options.rejectUnauthorized === false) {
+    throw new Error(
+      'TLS certificate verification cannot be switched off. AuspexLens connects in ' +
+        'thin mode, and node-oracledb always verifies the database server’s certificate ' +
+        'there — the setting that used to promise otherwise never had any effect.\n\n' +
+        'To connect to a server whose certificate is signed by a private or self-signed ' +
+        'CA, make that CA trusted instead of turning verification off: point the ' +
+        'NODE_EXTRA_CA_CERTS environment variable at its PEM file before starting VS Code. ' +
+        'That is the route measured to work against Amazon RDS (docs/RESEARCH.md §17.10).',
+    );
+  }
   return base;
 }
 

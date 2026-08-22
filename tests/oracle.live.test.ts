@@ -27,6 +27,8 @@ import { runAnonymousBlock, looksLikePlSql } from '../src/plsql/run';
 // `.js` for a `.ts` file — correct, and confusing enough that someone will
 // "fix" it back. A static import has neither problem.
 import { startBridge, BRIDGE_AUTH_HEADER } from '../src/mcp/bridgeServer';
+import { ConnectionManager, type ProfileConfig } from '../src/connections/manager';
+import { CredentialStore } from '../src/connections/secrets';
 import { createConnection } from 'node:net';
 
 const HOST = process.env['AUSPEX_ORACLE_HOST'];
@@ -102,11 +104,15 @@ afterAll(async () => {
  * Top-level await would also fix it, but only by making this file ESM, and the
  * package must stay CommonJS because that is what VS Code loads.
  */
-const live = (name: string, fn: () => void | Promise<void>) =>
-  it(name, async (ctx) => {
-    if (!reachable) ctx.skip();
-    await fn();
-  });
+const live = (name: string, fn: () => void | Promise<void>, timeout?: number) =>
+  it(
+    name,
+    async (ctx) => {
+      if (!reachable) ctx.skip();
+      await fn();
+    },
+    timeout,
+  );
 
 describe('the driver', () => {
   live('is in thin mode — no Instant Client anywhere', () => {
@@ -279,6 +285,47 @@ describe('privilege probing', () => {
   });
 });
 
+
+describe('privilege probing, against the account that has NOTHING', () => {
+  // The account the product recommends: CREATE SESSION and the SELECT grants it
+  // needs, and nothing else. It exists in e2e/init/01-fixtures.sql for this test
+  // and for no other reason.
+  //
+  // Until 2026-08-22 this returned canCreate=true, because CREATE SESSION matches
+  // `CREATE %` — so the advice fired on the very configuration it recommends.
+  // It was invisible here because every account in the fixtures had real CREATE
+  // privileges; it took a hand-built minimal user on AWS RDS to see it. The user
+  // now lives in the container, so the regression has a home.
+  live('a CREATE SESSION-only account is NOT reported as able to create objects', async () => {
+    const c = await oracledb.getConnection({
+      user: 'auspex_test',
+      password: 'auspexlens',
+      connectString: `${HOST}:${PORT}/${SERVICE}`,
+    });
+    try {
+      const p = await probePrivileges(c);
+      expect(p.catalog).toBe(true);
+      expect(p.performanceViews).toBe(false);
+      expect(p.canCreate).toBe(false);
+
+      // And the advice that follows: it must name the missing grant and must NOT
+      // tell a minimal account to become a minimal account.
+      const advice = privilegeAdvice(p);
+      expect(advice.join(' ')).toMatch(/SELECT_CATALOG_ROLE/);
+      expect(advice.join(' ')).not.toMatch(/can create objects/);
+    } finally {
+      await c.close();
+    }
+  });
+
+  live('the app account, which really can create, still gets the DDL warning', async () => {
+    // The positive case, so the assertion above is a measurement and not a
+    // function that learned to say false.
+    const p = await probePrivileges(conn);
+    expect(p.canCreate).toBe(true);
+    expect(privilegeAdvice(p).join(' ')).toMatch(/does not block DDL/);
+  });
+});
 
 describe('the MCP server, end to end against the real database', () => {
   live('list_objects returns the demo tables', async () => {
@@ -494,4 +541,150 @@ describe('explainPlanRows — the structured plan, and why it is one operation',
     const guarded = await executeReadOnly(conn, 'SELECT id FROM plan_table');
     expect(guarded.rows.length).toBe(0);
   });
+});
+
+/**
+ * Reconnection, against a session a DBA actually kills.
+ *
+ * The README has promised "automatic reconnection after an idle drop" since
+ * 0.1.0, and on 2026-08-22 a probe against AWS RDS showed the product did not do
+ * it: `ConnectionManager` cached the connection and handed back the same corpse
+ * for ever (docs/RESEARCH.md §17.10). The unit tests in `manager.test.ts` pin the
+ * logic; this pins the thing the logic is about — a real Oracle dropping a real
+ * session, and the error arriving as whatever Oracle chooses to send.
+ *
+ * The kill needs privileges the app user does not have, so it comes from a second
+ * connection as `system` — the container's `ORACLE_PASSWORD`. On RDS the same
+ * step needs `rdsadmin.rdsadmin_util.kill`, because there the master user has no
+ * `ALTER SYSTEM` (ORA-01031); that difference is recorded in RESEARCH §17.10 and
+ * is why this test lives here rather than in the RDS probes.
+ */
+describe('reconnection after the server drops the session', () => {
+  live('the manager reconnects, and it is genuinely a NEW session', async () => {
+    const store = new Map<string, string>();
+    const credentials = new CredentialStore({
+      get: (k) => Promise.resolve(store.get(k)),
+      store: (k, v) => { store.set(k, v); return Promise.resolve(); },
+      delete: (k) => { store.delete(k); return Promise.resolve(); },
+    });
+    const profile: ProfileConfig = {
+      id: 'live-reconnect',
+      label: 'live reconnect',
+      user: USER,
+      connectString: `${HOST}:${PORT}/${SERVICE}`,
+      kind: 'basic',
+    };
+    await credentials.put(profile.id, 'password', PASSWORD);
+
+    // Counting the opens is the assertion that cannot be argued with: it says a
+    // SECOND connection was made, regardless of what the database chooses to
+    // report about session identity.
+    let opens = 0;
+    const manager = new ConnectionManager(credentials, async (config) => {
+      opens += 1;
+      return (await oracledb.getConnection(config)) as never;
+    });
+
+    const handle = await manager.connect(profile);
+    expect(opens).toBe(1);
+
+    /** SID is a slot number and Oracle reuses it immediately — the first version
+     *  of this test asserted on it and failed with "expected '61' not to be '61'"
+     *  after a perfectly good reconnect. AUDSID is the auditing session id and
+     *  increments instead. */
+    const identity = async (): Promise<{ sid: string; audsid: string }> => {
+      const r = await handle.execute(
+        "SELECT SYS_CONTEXT('USERENV','SID'), SYS_CONTEXT('USERENV','SESSIONID') FROM dual",
+      );
+      return { sid: String(r.rows![0]![0]), audsid: String(r.rows![0]![1]) };
+    };
+
+    const before = await identity();
+    expect(before.sid).toMatch(/^\d+$/);
+
+    // Kill it from a privileged session, the way a DBA or an idle-timeout would.
+    const dba = await oracledb.getConnection({
+      user: 'system',
+      password: PASSWORD,
+      connectString: `${HOST}:${PORT}/${SERVICE}`,
+    });
+    try {
+      const found = await dba.execute<[number, number]>(
+        `SELECT sid, serial# FROM v$session WHERE sid = :sid`,
+        { sid: Number(before.sid) },
+      );
+      expect(found.rows!.length).toBe(1);
+      const [sid, serial] = found.rows![0]!;
+      await dba.execute(`ALTER SYSTEM KILL SESSION '${sid},${serial}' IMMEDIATE`);
+    } finally {
+      await dba.close();
+    }
+
+    // The next operation begins the way every operation in this product begins:
+    // by ending the previous transaction. That is where the healing happens, and
+    // it must simply work rather than throw.
+    await handle.rollback();
+
+    // The strong assertion: the manager opened a second connection rather than
+    // handing back the corpse, which is exactly what it did before this change.
+    expect(opens).toBe(2);
+
+    const after = await identity();
+    expect(after.audsid).not.toBe(before.audsid);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `  [live] killed sid=${before.sid} audsid=${before.audsid}; ` +
+        `reconnected as sid=${after.sid} audsid=${after.audsid}`,
+    );
+
+    await manager.disconnect(profile.id);
+  }, 60_000);
+
+  live('a statement on a killed session fails rather than silently re-running', async () => {
+    // The other half, and the reason the healing is in rollback() and not in
+    // execute(): a statement is sent INSIDE a read-only transaction, so retrying
+    // it on a fresh connection would run it with the read-only floor switched
+    // off. This asserts the product refuses that trade.
+    const store = new Map<string, string>();
+    const credentials = new CredentialStore({
+      get: (k) => Promise.resolve(store.get(k)),
+      store: (k, v) => { store.set(k, v); return Promise.resolve(); },
+      delete: (k) => { store.delete(k); return Promise.resolve(); },
+    });
+    const profile: ProfileConfig = {
+      id: 'live-nokill-retry',
+      label: 'live no retry',
+      user: USER,
+      connectString: `${HOST}:${PORT}/${SERVICE}`,
+      kind: 'basic',
+    };
+    await credentials.put(profile.id, 'password', PASSWORD);
+    const manager = new ConnectionManager(credentials, async (config) =>
+      (await oracledb.getConnection(config)) as never,
+    );
+    const handle = await manager.connect(profile);
+
+    const r = await handle.execute("SELECT SYS_CONTEXT('USERENV','SID') FROM dual");
+    const sid = Number(r.rows![0]![0]);
+
+    const dba = await oracledb.getConnection({
+      user: 'system',
+      password: PASSWORD,
+      connectString: `${HOST}:${PORT}/${SERVICE}`,
+    });
+    try {
+      const found = await dba.execute<[number, number]>(
+        `SELECT sid, serial# FROM v$session WHERE sid = :sid`,
+        { sid },
+      );
+      const [s, serial] = found.rows![0]!;
+      await dba.execute(`ALTER SYSTEM KILL SESSION '${s},${serial}' IMMEDIATE`);
+    } finally {
+      await dba.close();
+    }
+
+    await expect(handle.execute('SELECT 1 FROM dual')).rejects.toThrow();
+    await manager.disconnect(profile.id);
+  }, 60_000);
 });
