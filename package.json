@@ -1,9 +1,10 @@
 {
   "name": "auspexlens",
   "displayName": "AuspexLens",
+  "icon": "media/icon.png",
   "description": "A native, lightweight Oracle Database client for VS Code.",
   "publisher": "lensql",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "repository": {
     "type": "git",

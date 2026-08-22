@@ -3,6 +3,12 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [0.1.1] - 2026-08-22
+
+- The Marketplace listing now has its icon. 0.1.0 shipped a 1×1-pixel
+  placeholder and no `icon` field in the manifest, so the store showed the
+  default tile — permanently, not "while verifying". Nothing else changed.
+
 ## [0.1.0] - 2026-08-21
 
 First release. AuspexLens for Oracle Database, free tier:
