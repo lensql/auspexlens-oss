@@ -3,6 +3,27 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.0.0] - 2026-08-22
+
+**Same software as 0.2.0. The number is the news.** Nothing was added, removed
+or changed in this release — it is 0.2.0's code, republished under a version
+that says the surface is settled and will not move under you.
+
+Why now: everything the README promises has been executed against a real
+server, not only against a container. The 37 live cases pass unchanged on a
+managed **Oracle 19c** (AWS RDS SE2) over TCPS, on **Oracle AI Database 26ai
+Free 23.26** locally, and wallet import was proven end to end against a real
+**Autonomous Database** over mTLS. What that validation exposed on our side was
+fixed in 0.1.2, and the last gap it left — a wallet the engine could use but no
+command could reach — closed in 0.2.0.
+
+From this release the extension is also published on **Open VSX**, so editors
+that do not use the Microsoft Marketplace can install it.
+
+Commands, settings, the MCP tool names and the read-only contract are stable
+from here: they change by addition, or with a major version and a migration
+note.
+
 ## [0.2.0] - 2026-08-22
 
 - **Wallet connections work, and are listed again.** `AuspexLens: Import wallet`
