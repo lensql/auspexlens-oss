@@ -3,6 +3,29 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.0.1] - 2026-08-23
+
+Nothing about the extension's behaviour changed. This release is about being
+findable, and about saying more clearly what you get for nothing.
+
+- **The Marketplace listing now says what this is.** The extension was published
+  as plain "AuspexLens", which tells you nothing unless you already know the
+  name; it is now *AuspexLens — SQL IDE & MCP for Oracle Database*, and the
+  summary names the things people actually search for: thin mode with no Instant
+  Client, Autonomous Database wallets, the schema explorer, PL/SQL and explain
+  plans.
+- **The free/paid line now starts with a sentence, not a list.**
+  `src/licensing/tiers.ts` — the public file this README points at — opens with
+  the principle it follows: **free is working with the database safely; Pro is
+  performance, incidents and governance.** Two consequences are written down and
+  held by tests rather than by good intentions: every safety capability is free
+  and can never become paid, and **connections are never counted, capped or
+  metered**.
+- **The same file now records what has been decided but not built**, in a
+  separate list that the extension deliberately does not advertise. Nothing moves
+  into the capability list until it works — that rule cost this product a release
+  in 0.1.2 and it now has a test of its own.
+
 ## [1.0.0] - 2026-08-22
 
 **Same software as 0.2.0. The number is the news.** Nothing was added, removed

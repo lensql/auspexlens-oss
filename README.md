@@ -1,4 +1,7 @@
-# AuspexLens — a native, lightweight Oracle Database client for VS Code
+# AuspexLens — SQL IDE & MCP for Oracle Database
+
+**A native, lightweight Oracle Database client for VS Code, with a read-only MCP
+server built in.**
 
 Connects in **thin mode**: pure JavaScript, no JVM, no Oracle Instant Client to
 install. Read-only by design, with PII masking in the engine and an MCP server
@@ -35,9 +38,13 @@ Everything you need to actually work with an Oracle database:
 
 ![A join running against a real database: twelve invoices with customer names in the results grid, with the name column masked](https://lensql.dev/img/listing/auspexlens/results-grid.png)
 
-The free/paid line is written in one public file —
+**Free is working with the database safely. Pro is performance, incidents and
+governance.** That sentence is the whole rule, and the line it draws is written
+in one public file —
 [`src/licensing/tiers.ts`](https://github.com/lensql/auspexlens-oss/blob/main/src/licensing/tiers.ts)
-— so you can read it rather than take our word for it.
+— so you can read it rather than take our word for it. Two things it fixes in
+place, and tests hold them there: **every safety feature is free** and can never
+become paid, and **connections are never counted, capped or metered**.
 
 **AuspexLens Pro** (`lensql.auspexlens-pro`) adds visual explain plans with
 cost-hotspot analysis and advisors, a session monitor, a blocking tree and Top

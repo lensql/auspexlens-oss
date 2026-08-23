@@ -1,10 +1,10 @@
 {
   "name": "auspexlens",
-  "displayName": "AuspexLens",
+  "displayName": "AuspexLens — SQL IDE & MCP for Oracle Database",
   "icon": "media/icon.png",
-  "description": "A native, lightweight Oracle Database client for VS Code.",
+  "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -15,9 +15,9 @@
   },
   "categories": [
     "Programming Languages",
-    "Data Science",
-    "Other"
+    "Data Science"
   ],
+  "pricing": "Free",
   "main": "./dist/extension.js",
   "private": true,
   "scripts": {
@@ -218,9 +218,14 @@
   },
   "keywords": [
     "oracle",
+    "oracle database",
+    "oracle client",
     "plsql",
     "sql",
-    "database",
+    "explain plan",
+    "schema browser",
+    "autonomous database",
+    "wallet",
     "mcp"
   ]
 }
