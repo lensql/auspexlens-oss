@@ -20,6 +20,7 @@ export interface Capability {
 export const CAPABILITIES: readonly Capability[] = [
   // --- free: everything needed to actually work with an Oracle database -----
   { id: 'connect.basic',      tier: 'free', summary: 'Connect with user/password over verified TLS' },
+  { id: 'connect.wallet',     tier: 'free', summary: 'Import an Oracle wallet (.zip or folder) and connect with mTLS' },
   { id: 'connect.reconnect',  tier: 'free', summary: 'Reopen the connection when the server drops the session' },
   { id: 'explorer.objects',   tier: 'free', summary: 'Browse tables, views, sequences, packages, procedures, functions and triggers' },
   { id: 'explorer.source',    tier: 'free', summary: 'Read the source of PL/SQL objects' },
@@ -63,16 +64,13 @@ export const NEEDS_CATALOG_ROLE: readonly string[] = [
  * licence. Reading them can put a user out of compliance silently, so the product
  * does not read them at all — not even behind a toggle, in v1.
  *
- * `connect.wallet` is here from 0.1.2, and it is the uncomfortable one. The
- * ENGINE speaks wallet mTLS and it is proven against a server that demands a
- * client certificate (docs/RESEARCH.md §17.9) — but nothing in the extension ever
- * puts a wallet INTO SecretStorage, so no user could reach it. It was listed as
- * free through 0.1.0 and 0.1.1, which was wrong, and moving it here is the
- * correction rather than a change of plan: the import command is the next
- * feature, and this line moves back up when a user can actually use it.
+ * `connect.wallet` spent 0.1.2 in this list and came back out in 0.2.0, which is
+ * the shape this file is supposed to have: it was withdrawn the moment we learned
+ * no user could reach it, and restored in the same change that shipped
+ * `AuspexLens: Import wallet`. A capability is listed when it works, not when it
+ * is intended.
  */
 export const OUT_OF_SCOPE_V1: readonly string[] = [
-  'connect.wallet',
   'plsql.debugger',
   'awr.snapshots',
   'ash.history',

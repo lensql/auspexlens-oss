@@ -224,13 +224,12 @@ describe('ConnectionManager', () => {
     await expect(manager.connect(PROFILE)).rejects.toThrow('No stored password for “Test”');
   });
 
-  it('tells a wallet profile the truth about wallet support', async () => {
-    // Until the import command exists, a wallet profile cannot have its wallet in
-    // SecretStorage, and the old message sent the user to an import that was
-    // never built.
+  it('sends a half-stored wallet profile to the command that fixes it', async () => {
+    // Through 0.1.1 this message named an import that did not exist. It names one
+    // that does now, and this test is what keeps the two in step.
     const creds = new CredentialStore(storage({ 'auspexlens:p1:password': 'pw' }));
     const manager = new ConnectionManager(creds, async () => new FakeConn('a'));
     const wallet: ProfileConfig = { ...PROFILE, kind: 'wallet', configDir: '/tmp/w' };
-    await expect(manager.connect(wallet)).rejects.toThrow('configured outside the extension');
+    await expect(manager.connect(wallet)).rejects.toThrow('AuspexLens: Import wallet');
   });
 });

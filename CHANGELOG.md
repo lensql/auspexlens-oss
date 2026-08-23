@@ -3,6 +3,24 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [0.2.0] - 2026-08-22
+
+- **Wallet connections work, and are listed again.** `AuspexLens: Import wallet`
+  takes the `.zip` you download from Autonomous Database — or the folder you
+  unzipped it into — reads `tnsnames.ora` and `ewallet.pem`, and creates a
+  connection profile you can use straight away. The private key goes to your OS
+  keychain through SecretStorage and is never written to disk; only
+  `tnsnames.ora` is, because the driver reads that file itself.
+  - If your wallet shipped `ewallet.p12` and no `ewallet.pem`, which Oracle
+    documents as a real possibility, the import tells you the exact `openssl`
+    command to convert it rather than failing with something unhelpful.
+  - The archive is read with Node's own `zlib`, so this adds no dependency to
+    the extension. It refuses what it cannot fully understand — encryption,
+    zip64, unknown compression, traversing paths — instead of guessing.
+- `connect.wallet` is back in `tiers.ts` as a free capability. It was withdrawn
+  in 0.1.2 because nothing could reach it; it returns in the release that makes
+  it reachable, which is the rule that file is supposed to follow.
+
 ## [0.1.2] - 2026-08-22
 
 Validating against a real Oracle — a managed 19c on AWS RDS, and a container

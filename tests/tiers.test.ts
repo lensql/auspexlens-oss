@@ -38,13 +38,13 @@ describe('the free/paid boundary', () => {
     expect(tierOf('something.invented')).toBe('out-of-scope');
   });
 
-  it('does not advertise wallet connections while no user can reach them', () => {
-    // 0.1.0 and 0.1.1 listed connect.wallet as free. The engine really does speak
-    // wallet mTLS — but nothing puts a wallet into SecretStorage, so the listing
-    // promised something unreachable. This moves back to 'free' in the same
-    // change that ships the import command, and not before.
-    expect(tierOf('connect.wallet')).toBe('out-of-scope');
-    expect(CAPABILITIES.some((c) => c.id === 'connect.wallet')).toBe(false);
+  it('advertises wallet connections again, now that a command imports one', () => {
+    // The full arc, kept because it is the rule this file lives by: free in 0.1.0
+    // and 0.1.1 while unreachable, withdrawn in 0.1.2 the moment that was
+    // discovered, and back in 0.2.0 in the same change that shipped
+    // “AuspexLens: Import wallet”. Listed when it works, not when it is intended.
+    expect(tierOf('connect.wallet')).toBe('free');
+    expect(CAPABILITIES.some((c) => c.id === 'connect.wallet')).toBe(true);
   });
 
   it('promises reconnection only because the manager implements it', () => {

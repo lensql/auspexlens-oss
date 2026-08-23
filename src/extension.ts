@@ -16,6 +16,7 @@
 
 import * as vscode from 'vscode';
 import { CredentialStore } from './connections/secrets';
+import { readZipEntries, analyseWallet, WalletError } from './connections/wallet';
 import { ConnectionManager, type ProfileConfig } from './connections/manager';
 import { executeReadOnly, explainPlan, explainPlanRows } from './engine/readOnly';
 import { assessRisk, needsConfirmation, needsTypedConfirmation, confirmationPhrase } from './engine/statementRisk';
@@ -185,6 +186,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       if (!id) return;
       await connections.disconnect(id);
       treeProvider.refresh();
+    }),
+
+    // The optional Uri is what lets the integration suite drive this without a
+    // file dialog. It is only a location — every secret still comes from a prompt,
+    // except in ExtensionMode.Test, exactly as `connect` already does.
+    vscode.commands.registerCommand('auspexlens.importWallet', async (source?: vscode.Uri) => {
+      await importWallet(context, credentials, output, source);
     }),
 
     vscode.commands.registerCommand('auspexlens.forgetCredentials', async () => {
@@ -445,4 +453,190 @@ class ObjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
 export function deactivate(): void {
   void bridge?.close();
+}
+
+/**
+ * Import an Oracle wallet, and leave behind a profile that can connect.
+ *
+ * This is the half that was missing until 0.2.0: the engine has spoken wallet
+ * mTLS since Phase 3, but nothing ever put a wallet into SecretStorage, so the
+ * capability was advertised and unreachable (docs/RESEARCH.md §17). Everything
+ * that can go wrong with the FILE is decided in `connections/wallet.ts`, which is
+ * pure and tested; this function is the part that needs an editor.
+ *
+ * Where each piece ends up, and why:
+ *
+ *  - `ewallet.pem` goes to **SecretStorage** and never to disk. It carries a
+ *    private key, and `walletContent` takes it as a string precisely so the
+ *    product never has to leave one lying in a folder (threat T7).
+ *  - `tnsnames.ora` goes to the extension's **global storage**, because the
+ *    driver reads that file itself and needs a real `configDir`. It is not a
+ *    secret — it is a list of hostnames.
+ *  - the wallet password and the database password go to SecretStorage.
+ *  - the profile itself goes to settings, where every other profile lives.
+ */
+async function importWallet(
+  context: vscode.ExtensionContext,
+  credentials: CredentialStore,
+  output: vscode.OutputChannel,
+  given?: vscode.Uri,
+): Promise<void> {
+  // Test mode only, and structurally unreachable anywhere else — the same rule
+  // the connect command follows. VS Code sets Test exclusively when a test runner
+  // launched this host, which is the one place a prompt has nobody to answer it.
+  const seeded =
+    context.extensionMode === vscode.ExtensionMode.Test
+      ? {
+          alias: process.env['AUSPEXLENS_TEST_WALLET_ALIAS'],
+          user: process.env['AUSPEXLENS_TEST_WALLET_USER'],
+          walletPassword: process.env['AUSPEXLENS_TEST_WALLET_PASSWORD'],
+          password: process.env['AUSPEXLENS_TEST_PASSWORD'],
+          label: process.env['AUSPEXLENS_TEST_WALLET_LABEL'],
+        }
+      : {};
+
+  const source =
+    given ??
+    (
+      await vscode.window.showOpenDialog({
+        title: 'Import Oracle wallet',
+        openLabel: 'Import',
+        canSelectFiles: true,
+        canSelectFolders: true,
+        canSelectMany: false,
+        filters: { 'Wallet archive': ['zip'] },
+      })
+    )?.[0];
+  if (!source) return;
+
+  let contents;
+  try {
+    contents = analyseWallet(await readWalletFiles(source));
+  } catch (e) {
+    // A WalletError is a sentence written for the user — including the openssl
+    // line for a wallet that shipped only a PKCS#12. Anything else is a bug and
+    // should not be dressed up as advice.
+    const message = e instanceof WalletError ? e.message : `Could not read that wallet: ${String(e)}`;
+    await vscode.window.showErrorMessage(message, { modal: e instanceof WalletError });
+    return;
+  }
+
+  const alias =
+    seeded.alias ??
+    (await vscode.window.showQuickPick(contents.aliases, {
+      title: 'Which service?',
+      placeHolder: 'Autonomous Database offers _high, _medium and _low',
+    }));
+  if (!alias) return;
+
+  const user =
+    seeded.user ??
+    (await vscode.window.showInputBox({
+      title: 'Database user',
+      prompt: 'The database account, not your cloud login. ADMIN for a fresh Autonomous Database.',
+      ignoreFocusOut: true,
+    }));
+  if (!user) return;
+
+  // Only ask when there is something to ask for. An Autonomous wallet's PEM is
+  // encrypted and its password is the one set at download; a PEM produced by the
+  // `openssl pkcs12 … -nodes` conversion this product recommends is NOT encrypted
+  // and has no password at all. Prompting there would demand something that does
+  // not exist, and whatever the user typed would then be sent to the driver as
+  // the passphrase for an unencrypted key.
+  const walletPassword = contents.encrypted
+    ? seeded.walletPassword ??
+      (await vscode.window.showInputBox({
+        title: 'Wallet password',
+        prompt: 'The password you set when downloading the wallet — not the database password.',
+        password: true,
+        ignoreFocusOut: true,
+      }))
+    : '';
+  if (walletPassword === undefined) return;
+
+  const password =
+    seeded.password ??
+    (await vscode.window.showInputBox({
+      title: `Database password for ${user}`,
+      password: true,
+      ignoreFocusOut: true,
+      prompt: 'Stored in your OS keychain via SecretStorage — never in settings.json.',
+    }));
+  if (password === undefined) return;
+
+  const label =
+    seeded.label ??
+    (await vscode.window.showInputBox({
+      title: 'Name this connection',
+      value: alias,
+      ignoreFocusOut: true,
+    }));
+  if (!label) return;
+
+  // The id has to survive secretKey()'s rules — no spaces, no colons — because a
+  // profile id with a colon in it could forge another profile's key.
+  const id = `wallet-${alias.replace(/[^A-Za-z0-9_.-]/g, '-')}-${Date.now().toString(36)}`;
+
+  const dir = vscode.Uri.joinPath(context.globalStorageUri, 'wallets', id);
+  await vscode.workspace.fs.createDirectory(dir);
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(dir, 'tnsnames.ora'),
+    Buffer.from(contents.tnsnames, 'utf8'),
+  );
+
+  await credentials.put(id, 'walletContent', contents.pem);
+  await credentials.put(id, 'walletPassword', walletPassword);
+  await credentials.put(id, 'password', password);
+
+  const profile: ProfileConfig = {
+    id,
+    label,
+    user,
+    connectString: alias,
+    kind: 'wallet',
+    configDir: dir.fsPath,
+  };
+  const existing = profiles();
+  await config().update(
+    'connections.profiles',
+    [...existing, profile],
+    vscode.ConfigurationTarget.Global,
+  );
+
+  output.appendLine(
+    `wallet: imported “${label}” (${alias}); ${contents.aliases.length} aliases available, ` +
+      `${contents.encrypted ? 'encrypted' : 'unencrypted'} PEM in SecretStorage, ` +
+      'tnsnames.ora in global storage.',
+  );
+
+  // A modal offer would hang a headless run, and the import is already complete
+  // by this point — the prompt is a convenience, not part of the operation.
+  if (context.extensionMode !== vscode.ExtensionMode.Test) {
+    const connectNow = await vscode.window.showInformationMessage(
+      `Imported “${label}”. The wallet is in your OS keychain; only tnsnames.ora was written to disk.`,
+      'Connect now',
+    );
+    if (connectNow) await vscode.commands.executeCommand('auspexlens.connect', id);
+  }
+}
+
+/**
+ * Read a wallet from either a .zip or an already-unzipped folder.
+ *
+ * Both, because Oracle's own instructions tell people to unzip the archive, and
+ * because a wallet that shipped only a PKCS#12 has to be converted on disk before
+ * it can be imported at all — at which point the user has a folder, not a zip.
+ */
+async function readWalletFiles(source: vscode.Uri): Promise<Map<string, Buffer>> {
+  const stat = await vscode.workspace.fs.stat(source);
+  if (stat.type === vscode.FileType.Directory) {
+    const out = new Map<string, Buffer>();
+    for (const [name, type] of await vscode.workspace.fs.readDirectory(source)) {
+      if (type !== vscode.FileType.File) continue;
+      out.set(name, Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(source, name))));
+    }
+    return out;
+  }
+  return readZipEntries(Buffer.from(await vscode.workspace.fs.readFile(source)));
 }

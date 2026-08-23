@@ -16,8 +16,11 @@ https://github.com/lensql/auspexlens-oss
 Everything you need to actually work with an Oracle database:
 
 - **Connections** — user/password over verified TLS, which in thin mode is not
-  optional and cannot be switched off. If the server drops the session, the next
-  thing you run reopens it.
+  optional and cannot be switched off. **Import an Oracle wallet** (the `.zip`
+  from Autonomous Database, or the folder you unzipped it into) and connect with
+  mTLS; the private key goes to your OS keychain, and only `tnsnames.ora` is
+  written to disk. If the server drops the session, the next thing you run
+  reopens it.
 - **Explorer** — tables, views, sequences, packages, procedures, functions and
   triggers, with their source. Plus fuzzy **Find Database Object** across large
   schemas.

@@ -261,7 +261,8 @@ export class ConnectionManager {
       if (!walletContent || walletPassword === undefined || !profile.configDir) {
         throw new Error(
           `“${profile.label}” is a wallet connection but its wallet is not fully stored. ` +
-            'Wallet connections are configured outside the extension for now — see the README.',
+            'Run “AuspexLens: Import wallet” and pick the wallet .zip, or the folder you ' +
+            'unzipped it into.',
         );
       }
       creds = {

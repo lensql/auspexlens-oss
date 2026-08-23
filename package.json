@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "A native, lightweight Oracle Database client for VS Code.",
   "publisher": "lensql",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -51,6 +51,10 @@
         "command": "auspexlens.connect",
         "title": "AuspexLens: Connect",
         "icon": "$(plug)"
+      },
+      {
+        "command": "auspexlens.importWallet",
+        "title": "AuspexLens: Import wallet (.zip or folder)"
       },
       {
         "command": "auspexlens.disconnect",
