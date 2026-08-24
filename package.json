@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -59,6 +59,10 @@
       {
         "command": "auspexlens.disconnect",
         "title": "AuspexLens: Disconnect"
+      },
+      {
+        "command": "auspexlens.showContainer",
+        "title": "AuspexLens: Which container am I in?"
       },
       {
         "command": "auspexlens.runQuery",

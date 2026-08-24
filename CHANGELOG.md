@@ -3,6 +3,27 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.1.0] - 2026-08-23
+
+- **AuspexLens now tells you which container you are connected to**, and it is
+  free — because knowing where you are is part of running a statement safely,
+  not a premium feature. Connecting reports it beside the privilege advice, and
+  there is a new command, **“AuspexLens: Which container am I in?”**.
+  - **Connecting to the CDB root now warns you.** A statement run in `CDB$ROOT`
+    is not scoped to one application's data, and the read-only guard — which
+    stops it being destructive — has nothing to say about it reaching further
+    than you meant. Two safety layers working correctly can still leave that
+    surprise; naming the container removes it.
+  - It asks the database rather than the driver. node-oracledb's connection
+    property documents itself as equivalent to
+    `SYS_CONTEXT('USERENV','CON_NAME')` and, measured against a real container
+    database, is not: in the root it returns the *database* name, which would
+    have told you that you were inside a pluggable database when you were not.
+  - Works on a connection holding nothing but `CREATE SESSION`, like everything
+    else in the free tier.
+- A non-CDB database is reported as having no containers, which is an answer
+  rather than a gap — nothing pretends an estate exists where it cannot.
+
 ## [1.0.1] - 2026-08-23
 
 Nothing about the extension's behaviour changed. This release is about being

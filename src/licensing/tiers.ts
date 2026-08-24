@@ -70,6 +70,7 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'safety.readOnly',    tier: 'free', summary: 'Read-only enforcement: our own SQL guard plus SET TRANSACTION READ ONLY' },
   { id: 'safety.piiMask',     tier: 'free', summary: 'PII masking in the engine, before grid, export or MCP' },
   { id: 'safety.privileges',  tier: 'free', summary: 'Detects an over-privileged connection and says so' },
+  { id: 'connect.container',  tier: 'free', summary: 'Says which container the connection is in, and warns in the CDB root' },
   { id: 'mcp.readOnly',       tier: 'free', summary: 'Read-only MCP server for language models' },
 
   // --- pro: performance, incidents and governance ---------------------------
@@ -78,6 +79,19 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'advisor.query',      tier: 'pro',  summary: 'Query advisors for the Oracle optimiser' },
   { id: 'advisor.table',      tier: 'pro',  summary: 'Table and index advisors' },
   { id: 'dashboard.activity', tier: 'pro',  summary: 'Activity dashboards over the free v$ views' },
+
+  // --- pro: multitenant, the estate rather than one database ---------------
+  { id: 'multitenant.explorer',    tier: 'pro', summary: 'PDB inventory from the CDB root: name, open mode, restricted, size and its limit' },
+  { id: 'multitenant.monitor',     tier: 'pro', summary: 'Per-PDB metrics and Resource Manager limits, from views no pack licenses' },
+  { id: 'multitenant.crossQuery',  tier: 'pro', summary: 'One catalog question asked of every open container at once' },
+  { id: 'multitenant.scriptAdmin', tier: 'pro', summary: 'Generates PDB administration DDL for a DBA to run; never executes it' },
+
+  // --- pro: incidents — reading the past ------------------------------------
+  // A plain SELECT (`AS OF TIMESTAMP`), so it passes the read-only guard
+  // unchanged and needs no grant — measured on the least-privileged account.
+  // Paid because it is incident tooling, not because the SQL is restricted:
+  // anyone may type AS OF into the free editor and this product will run it.
+  { id: 'flashback.asOf', tier: 'pro', summary: 'Read a table as it was, and what changed since — with Oracle\'s undo errors explained' },
 ];
 
 /**
@@ -97,6 +111,7 @@ export const ALWAYS_FREE: readonly string[] = [
   'connect.basic',
   'connect.wallet',
   'connect.reconnect',
+  'connect.container',
 ];
 
 /**
@@ -112,6 +127,13 @@ export const NEEDS_CATALOG_ROLE: readonly string[] = [
   'monitor.sessions',
   'dashboard.activity',
   'explain.visual',
+  'multitenant.explorer',
+  'multitenant.monitor',
+  // `multitenant.crossQuery` is deliberately ABSENT: measured 2026-08-23, the
+  // CONTAINERS() clause parses for an account with no grant at all, because it
+  // is part of SQL rather than a catalog view. Listing it here would make the
+  // product refuse a query that works.
+  // `multitenant.scriptAdmin` is absent too — it generates text and reads nothing.
 ];
 
 /**
@@ -139,7 +161,7 @@ export const NEEDS_CATALOG_ROLE: readonly string[] = [
  */
 export interface PlannedCapability extends Capability {
   /** Which Pro pillar it belongs to, or 'free-depth' for the free half. */
-  pillar: 'governance' | 'performance' | 'ai' | 'free-depth';
+  pillar: 'governance' | 'performance' | 'ai' | 'multitenant' | 'free-depth';
   /** What it is built on, so the licence question is answered up front. */
   builtOn: string;
 }

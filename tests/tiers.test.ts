@@ -39,6 +39,26 @@ describe('the free/paid boundary', () => {
     expect(tierOf('something.invented')).toBe('out-of-scope');
   });
 
+  it('ships the multitenant pillar as Pro, and container identity as free', () => {
+    // Diego commissioned "working with PDBs" for Pro on 2026-08-23; the estate
+    // features are the paid pillar, and knowing WHICH container you are in is
+    // free because it is orientation, which this product treats as safety.
+    const estate = CAPABILITIES.filter((c) => c.id.startsWith('multitenant.'));
+    expect(estate.length).toBeGreaterThanOrEqual(4);
+    for (const c of estate) expect(c.tier, c.id).toBe('pro');
+    expect(tierOf('connect.container')).toBe('free');
+  });
+
+  it('does not make the cross-container clause need a grant it does not need', () => {
+    // Measured 2026-08-23: CONTAINERS(...) parses for an account with no grant
+    // at all, unlike every container V$ view. Listing it as needing the catalog
+    // role would make the product refuse a query that works — the opposite of
+    // the degradation this list exists for.
+    expect(NEEDS_CATALOG_ROLE).toContain('multitenant.explorer');
+    expect(NEEDS_CATALOG_ROLE).not.toContain('multitenant.crossQuery');
+    expect(NEEDS_CATALOG_ROLE).not.toContain('multitenant.scriptAdmin');
+  });
+
   it('advertises wallet connections again, now that a command imports one', () => {
     // The full arc, kept because it is the rule this file lives by: free in 0.1.0
     // and 0.1.1 while unreachable, withdrawn in 0.1.2 the moment that was

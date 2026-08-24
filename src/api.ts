@@ -17,6 +17,7 @@
 
 import type { ResultSet, ExecuteOptions } from './engine/readOnly';
 import type { Privileges } from './catalog/privileges';
+import type { ContainerInfo } from './engine/container';
 
 /** Incremented when something is REMOVED or changes meaning. Adding is free. */
 export const API_VERSION = 1;
@@ -50,4 +51,16 @@ export interface AuspexLensApi {
    * removing or changing meaning is what costs a version.
    */
   explainPlanRows(sql: string): Promise<{ columns: string[]; rows: unknown[][] }>;
+
+  /**
+   * Which container the active connection is in, or undefined when not connected.
+   *
+   * Free, and exposed to Pro rather than reimplemented there: knowing where you
+   * are is a safety property, and the estate features need it to explain why a
+   * PDB-scoped connection sees exactly one container instead of showing "1" and
+   * letting the user conclude their CDB holds one. Added without bumping
+   * `apiVersion` — adding is free, removing or changing meaning is what costs a
+   * version.
+   */
+  currentContainer(): Promise<ContainerInfo | undefined>;
 }

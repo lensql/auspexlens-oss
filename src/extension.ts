@@ -32,6 +32,7 @@ import { startBridge, type BridgeHandle } from './mcp/bridgeServer';
 import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
 import { API_VERSION, type AuspexLensApi } from './api';
+import { CONTAINER_SQL, parseContainer, describeContainer } from './engine/container';
 
 let bridge: BridgeHandle | undefined;
 
@@ -102,6 +103,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
 
   // --- commands -------------------------------------------------------------
   context.subscriptions.push(
+    vscode.commands.registerCommand('auspexlens.showContainer', async () => {
+      const conn = connections.active();
+      if (!conn) {
+        void vscode.window.showWarningMessage('Not connected. Run “AuspexLens: Connect”.');
+        return;
+      }
+      const res = await executeReadOnly(conn, CONTAINER_SQL, { mask: maskPolicy() });
+      const container = parseContainer(res.rows[0]);
+      const message = describeContainer(container);
+      output.appendLine(message);
+      // Root gets a warning severity, a PDB an informational one — the same
+      // distinction the connect flow makes, so the two never disagree.
+      if (container?.isRoot) void vscode.window.showWarningMessage(message);
+      else void vscode.window.showInformationMessage(message);
+    }),
+
     vscode.commands.registerCommand('auspexlens.showDocs', () =>
       vscode.env.openExternal(vscode.Uri.parse(DOCS_URL)),
     ),
@@ -162,6 +179,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
           const privileges = await probePrivileges(conn);
           for (const line of privilegeAdvice(privileges)) {
             output.appendLine(`privileges: ${line}`);
+          }
+
+          // Where this connection landed, reported next to what it may do. Both
+          // are orientation, both are free, and the root case below is the one
+          // worth interrupting for: the read-only guard stops a statement being
+          // destructive and says nothing about it reaching the whole instance.
+          try {
+            const res = await executeReadOnly(conn, CONTAINER_SQL, { mask: maskPolicy() });
+            const container = parseContainer(res.rows[0]);
+            output.appendLine(describeContainer(container));
+            if (container?.isRoot) {
+              void vscode.window.showWarningMessage(
+                `Connected to ${container.name} — the ROOT of ${container.dbName}, not a pluggable ` +
+                  'database. Statements here are not scoped to one application. For ordinary work, ' +
+                  "connect to a PDB's own service instead.",
+                'Show details',
+              ).then((choice) => { if (choice) output.show(true); });
+            }
+          } catch (e) {
+            // Never fail a connection over an orientation message. A database
+            // that will not answer SYS_CONTEXT is odd; a connect that aborts
+            // because of it is worse.
+            output.appendLine(`container: could not be determined (${(e as Error).message}).`);
           }
           // The over-privileged warning is shown, not buried in a log: it is the
           // difference between our guard being a convenience and being the only
@@ -268,6 +308,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       const conn = connections.active();
       if (!conn) throw new Error('AuspexLens is not connected to a database.');
       return explainPlanRows(conn, sql);
+    },
+    async currentContainer() {
+      const conn = connections.active();
+      if (!conn) return undefined;
+      // Through the same read-only executor as everything else, masking included.
+      // It reads SYS_CONTEXT and touches no table, but a second path to the
+      // database is a second path to get wrong.
+      const res = await executeReadOnly(conn, CONTAINER_SQL, { mask: maskPolicy() });
+      return parseContainer(res.rows[0]);
     },
   };
   output.appendLine(`API v${API_VERSION} exported for AuspexLens Pro.`);
