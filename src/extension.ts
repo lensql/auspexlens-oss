@@ -33,6 +33,7 @@ import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
 import { API_VERSION, type AuspexLensApi } from './api';
 import { CONTAINER_SQL, parseContainer, describeContainer } from './engine/container';
+import { proposeRootProfile, rootProfileAdvice } from './connections/rootProfile';
 
 let bridge: BridgeHandle | undefined;
 
@@ -117,6 +118,85 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       // distinction the connect flow makes, so the two never disagree.
       if (container?.isRoot) void vscode.window.showWarningMessage(message);
       else void vscode.window.showInformationMessage(message);
+    }),
+
+    /**
+     * Add a connection to the CDB root, derived from the one you are on.
+     *
+     * FREE, and that is the point. Oracle's own documentation says a session in a
+     * PDB sees that PDB only, so the estate features are gated by which container
+     * you connected to — not by a privilege a DBA can grant. A limitation whose
+     * only exit is another connection must not have that exit behind the paywall
+     * the limitation feeds; connections are never counted in this product.
+     */
+    vscode.commands.registerCommand('auspexlens.addRootConnection', async () => {
+      const conn = connections.active();
+      const activeId = connections.activeProfileId;
+      const source = profiles().find((p) => p.id === activeId);
+      if (!conn || !source) {
+        void vscode.window.showWarningMessage(
+          'Connect to a pluggable database first — the root connection is derived from it.',
+        );
+        return;
+      }
+
+      const res = await executeReadOnly(conn, CONTAINER_SQL, { mask: maskPolicy() });
+      const container = parseContainer(res.rows[0]);
+      if (container?.isRoot) {
+        void vscode.window.showInformationMessage(
+          `This connection is already the root of ${container.dbName}.`,
+        );
+        return;
+      }
+      if (container && !container.isContainerDatabase) {
+        void vscode.window.showInformationMessage(
+          `${container.dbName} is a non-CDB database — it has no root to connect to.`,
+        );
+        return;
+      }
+
+      let proposal;
+      try {
+        proposal = proposeRootProfile(source, container?.dbName ?? '', profiles().map((p) => p.id));
+      } catch (e) {
+        void vscode.window.showErrorMessage((e as Error).message);
+        return;
+      }
+
+      // Both values are proposals, not facts: the service name is a convention and
+      // the account almost certainly has to change. So both are editable, and the
+      // profile is written only after the user has seen them.
+      const service = await vscode.window.showInputBox({
+        title: 'Service name of the CDB root',
+        value: proposal.service,
+        prompt: rootProfileAdvice(proposal.service, proposal.profile.user),
+      });
+      if (service === undefined || service.trim() === '') return;
+      const user = await vscode.window.showInputBox({
+        title: 'User for the root connection',
+        value: proposal.profile.user,
+        prompt: 'A PDB-local user normally cannot log in to the root — a common user (C##…) can.',
+      });
+      if (user === undefined || user.trim() === '') return;
+
+      const profile = {
+        ...proposal.profile,
+        user: user.trim(),
+        connectString: proposal.profile.connectString.replace(
+          `/${proposal.service}`, `/${service.trim()}`),
+      };
+      // Written to the workspace settings the profile list already comes from —
+      // no second store, and no password: that is asked for on first connect and
+      // goes to SecretStorage like every other one.
+      await config().update(
+        'connections.profiles', [...profiles(), profile], vscode.ConfigurationTarget.Global,
+      );
+      output.appendLine(`added root profile ${profile.id} -> ${profile.connectString}`);
+      const choice = await vscode.window.showInformationMessage(
+        `Added “${profile.label}”. Connect to it to see every container in this CDB.`,
+        'Connect now',
+      );
+      if (choice) void vscode.commands.executeCommand('auspexlens.connect', profile.id);
     }),
 
     vscode.commands.registerCommand('auspexlens.showDocs', () =>

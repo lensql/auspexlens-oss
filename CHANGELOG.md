@@ -3,6 +3,26 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.2.0] - 2026-08-23
+
+- **“Add a connection to the CDB root”** — a new command that derives a root
+  connection from the pluggable database you are already on, swapping the
+  service name and leaving both the service and the user editable before
+  anything is saved.
+  - Why it is free: Oracle's own documentation is explicit that *a user whose
+    current container is a PDB can view data for that PDB only*. Seeing the whole
+    container database is therefore gated by **which container you connected
+    to**, not by a privilege anyone can grant you — and a limitation whose only
+    way out is another connection must not have that way out behind a paywall.
+    AuspexLens has never counted or capped connections and never will.
+  - It refuses rather than guesses: a wallet profile's connect string is a TNS
+    alias with no service to swap, and it says so instead of producing a profile
+    that cannot resolve. It never overwrites an existing profile either.
+  - The service name it proposes is what the database reports as its own name,
+    which is the usual convention rather than a fact about your installation —
+    the prompt says so, and warns that a PDB-local account normally cannot log in
+    to the root.
+
 ## [1.1.0] - 2026-08-23
 
 - **AuspexLens now tells you which container you are connected to**, and it is

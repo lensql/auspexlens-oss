@@ -71,6 +71,7 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'safety.piiMask',     tier: 'free', summary: 'PII masking in the engine, before grid, export or MCP' },
   { id: 'safety.privileges',  tier: 'free', summary: 'Detects an over-privileged connection and says so' },
   { id: 'connect.container',  tier: 'free', summary: 'Says which container the connection is in, and warns in the CDB root' },
+  { id: 'connect.cdbRoot',    tier: 'free', summary: 'Derives a CDB-root connection profile from the PDB one you are on' },
   { id: 'mcp.readOnly',       tier: 'free', summary: 'Read-only MCP server for language models' },
 
   // --- pro: performance, incidents and governance ---------------------------
@@ -91,6 +92,7 @@ export const CAPABILITIES: readonly Capability[] = [
   // unchanged and needs no grant — measured on the least-privileged account.
   // Paid because it is incident tooling, not because the SQL is restricted:
   // anyone may type AS OF into the free editor and this product will run it.
+  { id: 'governance.posture', tier: 'pro', summary: 'Security posture report: VPD, redaction, encryption and audit policies, each with its licence footing' },
   { id: 'flashback.asOf', tier: 'pro', summary: 'Read a table as it was, and what changed since — with Oracle\'s undo errors explained' },
 ];
 
@@ -112,6 +114,7 @@ export const ALWAYS_FREE: readonly string[] = [
   'connect.wallet',
   'connect.reconnect',
   'connect.container',
+  'connect.cdbRoot',
 ];
 
 /**
@@ -129,6 +132,7 @@ export const NEEDS_CATALOG_ROLE: readonly string[] = [
   'explain.visual',
   'multitenant.explorer',
   'multitenant.monitor',
+  'governance.posture',
   // `multitenant.crossQuery` is deliberately ABSENT: measured 2026-08-23, the
   // CONTAINERS() clause parses for an account with no grant at all, because it
   // is part of SQL rather than a catalog view. Listing it here would make the

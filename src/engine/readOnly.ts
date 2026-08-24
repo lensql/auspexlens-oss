@@ -110,6 +110,25 @@ export async function beginReadOnly(
  * read-only — the database is never asked a question the guard has already
  * answered.
  */
+/**
+ * Run one step of a two-statement operation, and say which step failed.
+ *
+ * Oracle reports a parse failure the same way wherever it happens, so
+ * `EXPLAIN PLAN FOR <your sql>` failing and reading the plan back failing are
+ * indistinguishable in the message a user sees. This adds the half that was
+ * missing and preserves the original text, because the ORA- code is what a DBA
+ * will search for.
+ */
+async function stage<T>(what: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    const err = e as Error;
+    err.message = `${what} failed: ${err.message}`;
+    throw err;
+  }
+}
+
 export async function executeReadOnly(
   conn: ReadOnlyCapableConnection,
   sql: string,
@@ -134,18 +153,6 @@ export async function executeReadOnly(
 }
 
 /**
- * `EXPLAIN PLAN` plus the read-back, as one operation.
- *
- * Two statements, deliberately not one: `EXPLAIN PLAN FOR ...` populates
- * PLAN_TABLE$ and returns nothing, and `DBMS_XPLAN.DISPLAY()` is what renders it.
- * Neither runs inside a read-only transaction — see the note at the top.
- *
- * `DBMS_XPLAN.DISPLAY_CURSOR` is deliberately NOT used here: it needs privileges
- * on the `v$` views, which a least-privilege connection does not have. Basic
- * explain must work for the free tier with `CREATE SESSION` + `SELECT` and
- * nothing else. The cursor-level plan is a Pro feature for exactly that reason.
- */
-/**
  * `EXPLAIN PLAN` plus the STRUCTURED read-back — the rows Pro's visual plan and
  * advisors consume.
  *
@@ -168,19 +175,32 @@ export async function explainPlanRows(
     throw new Error('only a query can be explained.');
   }
   await beginReadOnly(conn, false);
-  await conn.execute(`EXPLAIN PLAN FOR ${sql.replace(/;\s*$/, '')}`);
-  const out = await conn.execute(
+  await stage('EXPLAIN PLAN', () =>
+    conn.execute(`EXPLAIN PLAN FOR ${sql.replace(/;\s*$/, '')}`));
+  const out = await stage('reading PLAN_TABLE', () => conn.execute(
     `SELECT id, parent_id, operation, options, object_owner, object_name,
             cardinality, bytes, cost, access_predicates, filter_predicates
        FROM plan_table
       ORDER BY id`,
-  );
+  ));
   return {
     columns: (out.metaData ?? []).map((c) => c.name),
     rows: out.rows ?? [],
   };
 }
 
+/**
+ * `EXPLAIN PLAN` plus the read-back, as one operation.
+ *
+ * Two statements, deliberately not one: `EXPLAIN PLAN FOR ...` populates
+ * PLAN_TABLE$ and returns nothing, and `DBMS_XPLAN.DISPLAY()` is what renders it.
+ * Neither runs inside a read-only transaction — see the note at the top.
+ *
+ * `DBMS_XPLAN.DISPLAY_CURSOR` is deliberately NOT used here: it needs privileges
+ * on the `v$` views, which a least-privilege connection does not have. Basic
+ * explain must work for the free tier with `CREATE SESSION` + `SELECT` and
+ * nothing else. The cursor-level plan is a Pro feature for exactly that reason.
+ */
 export async function explainPlan(
   conn: ReadOnlyCapableConnection,
   sql: string,
@@ -191,9 +211,15 @@ export async function explainPlan(
   }
   // Out of any read-only transaction first — see beginReadOnly.
   await beginReadOnly(conn, false);
-  await conn.execute(`EXPLAIN PLAN FOR ${sql.replace(/;\s*$/, '')}`);
-  const out = await conn.execute(
-    'SELECT plan_table_output FROM TABLE(DBMS_XPLAN.DISPLAY())',
-  );
+  // Two statements, and an error from either arrives looking identical. Naming
+  // which half failed is worth the wrapper twice over: a user reading ORA-00900
+  // cannot tell whether their SQL would not parse or whether reading the plan
+  // back failed, and neither could we — an intermittent ORA-00900 here (see
+  // docs/TESTING.md, twelfth session) survived five eliminated hypotheses partly
+  // because the error never said where it came from.
+  await stage('EXPLAIN PLAN', () =>
+    conn.execute(`EXPLAIN PLAN FOR ${sql.replace(/;\s*$/, '')}`));
+  const out = await stage('DBMS_XPLAN.DISPLAY', () =>
+    conn.execute('SELECT plan_table_output FROM TABLE(DBMS_XPLAN.DISPLAY())'));
   return (out.rows ?? []).map((r) => String(r[0] ?? ''));
 }
