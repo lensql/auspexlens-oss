@@ -34,6 +34,10 @@ import { CAPABILITIES } from './licensing/tiers';
 import { API_VERSION, type AuspexLensApi } from './api';
 import { CONTAINER_SQL, parseContainer, describeContainer, shortContainerLabel } from './engine/container';
 import { proposeRootProfile, proposePdbProfile, rootProfileAdvice } from './connections/rootProfile';
+import {
+  connectionKinds, defaultsFor, hintFor, validateAnswers, buildProfile, describeProfile,
+  type ConnectionKindId, type WizardAnswers,
+} from './ui/connectionWizard';
 
 let bridge: BridgeHandle | undefined;
 
@@ -294,10 +298,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
     vscode.commands.registerCommand('auspexlens.connect', async (profileId?: unknown) => {
       const list = profiles();
       if (list.length === 0) {
-        vscode.window.showInformationMessage(
-          'No connection profiles yet. Add one under the setting ' +
-            '“auspexlens.connections.profiles” — passwords are NOT stored there.',
-        );
+        // Not a message telling you to go and edit a settings key. The command a
+        // person pressed was "connect", so the answer is the thing that leads to
+        // a connection — RedLens has worked this way since its first release and
+        // it is the single largest difference in the first five minutes.
+        void vscode.commands.executeCommand('auspexlens.addConnection');
         return;
       }
       // The optional argument is the programmatic path: the screenshot suite and
@@ -406,6 +411,138 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
     // The optional Uri is what lets the integration suite drive this without a
     // file dialog. It is only a location — every secret still comes from a prompt,
     // except in ExtensionMode.Test, exactly as `connect` already does.
+    /**
+     * The wizard. Contextual defaults, a hint under every field, and a test
+     * before anything is written — the three rules RedLens's wizard follows.
+     */
+    vscode.commands.registerCommand('auspexlens.addConnection', async () => {
+      const kinds = connectionKinds();
+      const picked = await vscode.window.showQuickPick(
+        kinds.map((k) => ({ label: k.label, detail: k.detail, id: k.id })),
+        { title: 'AuspexLens: add a connection — what are you connecting to?',
+          placeHolder: 'Pick how this database is reached', ignoreFocusOut: true },
+      );
+      if (!picked) return;
+      const kind = picked.id as ConnectionKindId;
+
+      // The wallet path is the import command's, not a second copy of it.
+      if (kind === 'wallet') {
+        await vscode.commands.executeCommand('auspexlens.importWallet');
+        return;
+      }
+
+      const spec = kinds.find((k) => k.id === kind)!;
+      const defaults = defaultsFor(kind);
+      const answers: WizardAnswers = {};
+      let step = 0;
+      for (const field of spec.asks) {
+        step += 1;
+        const value = await vscode.window.showInputBox({
+          title: `Add a connection (${step}/${spec.asks.length})`,
+          value: defaults[field] ?? '',
+          placeHolder: hintFor(field),
+          prompt: hintFor(field),
+          ignoreFocusOut: true,
+        });
+        if (value === undefined) return;   // escape cancels the whole wizard
+        answers[field as keyof WizardAnswers] = value;
+      }
+
+      const errors = validateAnswers(kind, answers);
+      if (errors.length > 0) {
+        // Every problem at once. Running the wizard three times to learn three
+        // things is how a person decides the tool is not worth it.
+        void vscode.window.showErrorMessage(errors.join(' '));
+        return;
+      }
+      const profile = buildProfile(kind, answers, profiles().map((p) => p.id));
+
+      // Test before save. A profile that does not connect is worse than no
+      // profile: it fails later, somewhere else, with the wizard forgotten.
+      const password = await vscode.window.showInputBox({
+        title: `Password for ${profile.user}@${profile.connectString}`,
+        password: true, ignoreFocusOut: true,
+        prompt: 'Stored in your OS keychain via SecretStorage — never in settings.json.',
+      });
+      if (password === undefined) return;
+      await credentials.put(profile.id, 'password', password);
+
+      const ok = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Testing the connection…' },
+        async () => {
+          try {
+            await connections.connect(profile);
+            return true;
+          } catch (e) {
+            const message = (e as Error).message.split('\n')[0];
+            const choice = await vscode.window.showErrorMessage(
+              `Could not connect: ${message}`, 'Save anyway', 'Discard',
+            );
+            return choice === 'Save anyway';
+          }
+        },
+      );
+      if (!ok) {
+        await credentials.forget(profile.id);
+        return;
+      }
+
+      await config().update(
+        'connections.profiles', [...profiles(), profile], vscode.ConfigurationTarget.Global,
+      );
+      await setConnected(connections.active() !== undefined);
+      treeProvider.refresh();
+      void vscode.window.showInformationMessage(`Added and connected: ${profile.label}.`);
+    }),
+
+    /**
+     * See what is configured, and remove what is not wanted.
+     *
+     * Adding lands back in the wizard rather than growing a second flow: there is
+     * one description of what a connection needs, and it is the one that already
+     * validates.
+     */
+    vscode.commands.registerCommand('auspexlens.manageConnections', async () => {
+      const list = profiles();
+      if (list.length === 0) {
+        void vscode.commands.executeCommand('auspexlens.addConnection');
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        list.map((p) => ({ ...describeProfile(p), id: p.id })),
+        { title: 'AuspexLens: connections', placeHolder: 'Pick one to act on' },
+      );
+      if (!picked) return;
+      const action = await vscode.window.showQuickPick(
+        [
+          { label: '$(plug) Connect', value: 'connect' },
+          { label: '$(add) Add another…', value: 'add' },
+          { label: '$(trash) Remove', value: 'remove',
+            detail: 'Deletes the profile and forgets its stored password' },
+        ],
+        { title: picked.label },
+      );
+      if (!action) return;
+      if (action.value === 'connect') {
+        void vscode.commands.executeCommand('auspexlens.connect', picked.id);
+        return;
+      }
+      if (action.value === 'add') {
+        void vscode.commands.executeCommand('auspexlens.addConnection');
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Remove “${picked.label}”?`, { modal: true }, 'Remove',
+      );
+      if (confirm !== 'Remove') return;
+      await credentials.forget(picked.id);
+      await config().update(
+        'connections.profiles', profiles().filter((p) => p.id !== picked.id),
+        vscode.ConfigurationTarget.Global,
+      );
+      void vscode.window.showInformationMessage(`Removed ${picked.label}.`);
+    }),
+
     vscode.commands.registerCommand('auspexlens.importWallet', async (source?: vscode.Uri) => {
       await importWallet(context, credentials, output, source);
     }),

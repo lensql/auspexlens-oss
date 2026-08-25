@@ -58,6 +58,7 @@ export interface Capability {
 export const CAPABILITIES: readonly Capability[] = [
   // --- free: everything needed to actually work with an Oracle database -----
   { id: 'connect.basic',      tier: 'free', summary: 'Connect with user/password over verified TLS' },
+  { id: 'connect.manage',     tier: 'free', summary: 'Add, test and remove connections from a wizard — never by editing settings.json' },
   { id: 'connect.wallet',     tier: 'free', summary: 'Import an Oracle wallet (.zip or folder) and connect with mTLS' },
   { id: 'connect.reconnect',  tier: 'free', summary: 'Reopen the connection when the server drops the session' },
   { id: 'explorer.objects',   tier: 'free', summary: 'Browse tables, views, sequences, packages, procedures, functions and triggers' },
@@ -116,6 +117,7 @@ export const ALWAYS_FREE: readonly string[] = [
   'connect.reconnect',
   'connect.container',
   'connect.cdbRoot',
+  'connect.manage',
 ];
 
 /**

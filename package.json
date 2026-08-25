@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -52,6 +52,18 @@
         "title": "Connect",
         "category": "AuspexLens",
         "icon": "$(plug)"
+      },
+      {
+        "command": "auspexlens.addConnection",
+        "title": "Add a connection",
+        "category": "AuspexLens",
+        "icon": "$(add)"
+      },
+      {
+        "command": "auspexlens.manageConnections",
+        "title": "Manage connections",
+        "category": "AuspexLens",
+        "icon": "$(gear)"
       },
       {
         "command": "auspexlens.importWallet",
@@ -169,11 +181,6 @@
           "group": "1_connection@1"
         },
         {
-          "command": "auspexlens.importWallet",
-          "when": "view == auspexlens.explorer",
-          "group": "1_connection@2"
-        },
-        {
           "command": "auspexlens.disconnect",
           "when": "view == auspexlens.explorer && auspexlens.connected",
           "group": "1_connection@3"
@@ -192,6 +199,21 @@
           "command": "auspexlens.addPdbConnection",
           "when": "view == auspexlens.explorer && auspexlens.connected",
           "group": "2_container@3"
+        },
+        {
+          "command": "auspexlens.addConnection",
+          "when": "view == auspexlens.explorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "auspexlens.manageConnections",
+          "when": "view == auspexlens.explorer",
+          "group": "1_connection@2"
+        },
+        {
+          "command": "auspexlens.importWallet",
+          "when": "view == auspexlens.explorer",
+          "group": "1_connection@3"
         }
       ],
       "editor/context": [
@@ -301,7 +323,7 @@
     "viewsWelcome": [
       {
         "view": "auspexlens.explorer",
-        "contents": "No connection yet.\n[Connect](command:auspexlens.connect)\n[Import an Oracle wallet](command:auspexlens.importWallet)\nWallets come as the .zip you download from Autonomous Database — AuspexLens reads it and keeps the private key in your OS keychain."
+        "contents": "No connection yet.\n[Add a connection](command:auspexlens.addConnection)\n[Import an Oracle wallet](command:auspexlens.importWallet)\nThe wizard asks for host, port, service and user, proposes Oracle’s default port, and tests the connection before saving anything. Your password goes to the OS keychain."
       }
     ],
     "configuration": {

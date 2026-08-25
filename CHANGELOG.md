@@ -3,6 +3,29 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.7.0] - 2026-08-25
+
+- **You can add a connection without editing a settings file.** Until now the
+  only way to configure AuspexLens was to hand-write JSON under
+  `auspexlens.connections.profiles`, and pressing **Connect** with nothing
+  configured told you to go and do that. It now opens a wizard.
+  - It asks what you are connecting to — host/port/service, an Autonomous
+    Database wallet, or a TNS alias you already have — and proposes Oracle's
+    default port rather than starting every field blank.
+  - Every field carries an example, including the one people get wrong: the
+    service name is not the SID.
+  - **It tests the connection before saving anything.** A profile that does not
+    connect is worse than no profile, because it fails later somewhere else. If
+    the test fails you get the real error and the choice to save anyway.
+  - If you paste a whole connect string into the host field — which is what
+    everyone does — it tells you so instead of saving something that cannot work.
+- **Manage connections**: see what is configured, connect to one, or remove one
+  along with its stored password.
+- **The activity bar icon carries the lens again.** The one shipped in 1.3.0 was
+  a database cylinder with no lens, in a product called AuspexLens. The
+  Marketplace tile is also lighter: same image, 5.5 KB instead of 19.8 KB, and
+  without the alpha channel that could make it sit oddly on some backgrounds.
+
 ## [1.6.0] - 2026-08-25
 
 - **The explorer header says which container you are in.** A tree of schemas
