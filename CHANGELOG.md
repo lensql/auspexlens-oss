@@ -3,6 +3,20 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.10.0] - 2026-08-25
+
+- **Query history**, so the statement you ran twenty minutes ago is not gone.
+  Picking one **opens it in an editor** rather than running it — recalling a
+  query and executing it are different intentions, and only one of them is safe
+  to guess at.
+- **Save and open queries by name**, for the ones you will want next month.
+- History and saved queries work while disconnected, because looking for the
+  query that connects is the normal case.
+- **Only statements are stored, never results.** AuspexLens masks personal data
+  in the engine before anything sees it; a history that cached rows would be a
+  copy of your data sitting outside every one of those controls. Nothing here
+  leaves your machine either.
+
 ## [1.9.0] - 2026-08-25
 
 - **A running query can be cancelled.** It shows a progress notification while it

@@ -33,6 +33,10 @@ import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
 import { API_VERSION, type AuspexLensApi } from './api';
 import { CONTAINER_SQL, parseContainer, describeContainer, shortContainerLabel } from './engine/container';
+import {
+  pushHistory, summarise, saveQuery, removeQuery, ago,
+  type HistoryEntry, type SavedQuery,
+} from './editor/history';
 import { proposeRootProfile, proposePdbProfile, rootProfileAdvice } from './connections/rootProfile';
 import {
   connectionKinds, defaultsFor, hintFor, validateAnswers, buildProfile, describeProfile,
@@ -115,6 +119,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
    * where our own guard is the only thing between a careless statement and the
    * database.
    */
+  /**
+   * History and saved queries, in globalState.
+   *
+   * globalState rather than workspaceState: a connection profile is global, so
+   * the statements you ran against it are not a property of whichever folder
+   * happened to be open. Only statements are stored — never rows; see
+   * `editor/history.ts` for why that line is where it is.
+   */
+  const HISTORY_KEY = 'auspexlens.history';
+  const SAVED_KEY = 'auspexlens.savedQueries';
+  const history = () => context.globalState.get<HistoryEntry[]>(HISTORY_KEY, []);
+  const savedQueries = () => context.globalState.get<SavedQuery[]>(SAVED_KEY, []);
+  const remember = (sql: string, elapsedMs?: number) =>
+    context.globalState.update(HISTORY_KEY, pushHistory(history(), {
+      sql, at: Date.now(), profileId: connections.activeProfileId, elapsedMs,
+    }));
+
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   status.command = 'auspexlens.statusMenu';
   context.subscriptions.push(status);
@@ -407,6 +428,81 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       void vscode.window.setStatusBarMessage('Cancel sent.', 2000);
     }),
 
+    vscode.commands.registerCommand('auspexlens.queryHistory', async () => {
+      const list = history();
+      if (list.length === 0) {
+        void vscode.window.showInformationMessage('No queries run yet in this window.');
+        return;
+      }
+      const now = Date.now();
+      const picked = await vscode.window.showQuickPick(
+        list.map((h, i) => ({
+          label: summarise(h.sql),
+          description: ago(h.at, now) + (h.elapsedMs !== undefined ? ` · ${h.elapsedMs} ms` : ''),
+          index: i,
+        })),
+        { title: 'AuspexLens: query history', matchOnDescription: true },
+      );
+      if (!picked) return;
+      // Opened in an editor rather than run. The statement is the thing being
+      // recalled, and running someone's old query the instant they click it is
+      // exactly the surprise this product exists to avoid.
+      const doc = await vscode.workspace.openTextDocument({
+        content: list[picked.index]!.sql, language: 'sql',
+      });
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
+
+    vscode.commands.registerCommand('auspexlens.saveQuery', async () => {
+      const editor = vscode.window.activeTextEditor;
+      const sql = (editor?.selection.isEmpty === false
+        ? editor.document.getText(editor.selection)
+        : editor?.document.getText() ?? '').trim();
+      if (sql === '') {
+        void vscode.window.showWarningMessage('Nothing to save — open a query first.');
+        return;
+      }
+      const name = await vscode.window.showInputBox({
+        title: 'Save this query as', placeHolder: 'Daily order totals', ignoreFocusOut: true,
+      });
+      if (name === undefined) return;
+      try {
+        await context.globalState.update(SAVED_KEY, saveQuery(savedQueries(), name, sql, Date.now()));
+        void vscode.window.setStatusBarMessage(`Saved “${name.trim()}”.`, 2500);
+      } catch (e) {
+        void vscode.window.showErrorMessage((e as Error).message);
+      }
+    }),
+
+    vscode.commands.registerCommand('auspexlens.openSavedQuery', async () => {
+      const list = savedQueries();
+      if (list.length === 0) {
+        void vscode.window.showInformationMessage(
+          'No saved queries yet. Run “AuspexLens: Save query” with a query open.',
+        );
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        list.map((q) => ({ label: q.name, description: summarise(q.sql, 70), name: q.name })),
+        { title: 'AuspexLens: saved queries', matchOnDescription: true },
+      );
+      if (!picked) return;
+      const action = await vscode.window.showQuickPick(
+        [{ label: '$(go-to-file) Open', value: 'open' },
+         { label: '$(trash) Delete', value: 'delete' }],
+        { title: picked.label },
+      );
+      if (!action) return;
+      if (action.value === 'delete') {
+        await context.globalState.update(SAVED_KEY, removeQuery(savedQueries(), picked.name));
+        void vscode.window.setStatusBarMessage(`Deleted “${picked.name}”.`, 2000);
+        return;
+      }
+      const q = savedQueries().find((x) => x.name === picked.name)!;
+      const doc = await vscode.workspace.openTextDocument({ content: q.sql, language: 'sql' });
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
+
     vscode.commands.registerCommand('auspexlens.showDocs', () =>
       vscode.env.openExternal(vscode.Uri.parse(DOCS_URL)),
     ),
@@ -680,10 +776,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
     }),
 
     vscode.commands.registerCommand('auspexlens.runQuery', () =>
-      runFromEditor(connections, output, { explain: false }),
+      runFromEditor(connections, output, { explain: false, remember }),
     ),
     vscode.commands.registerCommand('auspexlens.explainQuery', () =>
-      runFromEditor(connections, output, { explain: true }),
+      runFromEditor(connections, output, { explain: true, remember }),
     ),
 
     vscode.commands.registerCommand('auspexlens.findObject', async () => {
@@ -822,7 +918,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
 async function runFromEditor(
   connections: ConnectionManager,
   output: vscode.OutputChannel,
-  options: { explain: boolean },
+  options: {
+    explain: boolean;
+    /**
+     * Record the statement once it has run.
+     *
+     * Passed in rather than reached for, because this function lives outside
+     * `activate` and the storage belongs to the ExtensionContext. It is called
+     * only after the statement completed — a query the guard refused was never
+     * run, and putting it in "what I ran" would be a lie the list cannot correct.
+     */
+    remember?: (sql: string, elapsedMs?: number) => Thenable<void>;
+  },
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
@@ -860,6 +967,7 @@ async function runFromEditor(
   try {
     if (options.explain) {
       const lines = await explainPlan(conn, sql);
+      void options.remember?.(sql, Date.now() - started);
       const doc = await vscode.workspace.openTextDocument({ content: lines.join('\n'), language: 'plaintext' });
       await vscode.window.showTextDocument(doc, { preview: true });
       return;
@@ -895,11 +1003,14 @@ async function runFromEditor(
       // capability not granted cannot be misused.
       { enableScripts: false },
     );
+    const elapsedMs = Date.now() - started;
+    void options.remember?.(sql, elapsedMs);
+
     panel.webview.html = renderGrid({
       columns: res.columns,
       rows: res.rows,
       maskedColumns: res.masked.columns,
-      elapsedMs: Date.now() - started,
+      elapsedMs,
       cspSource: panel.webview.cspSource,
       note: res.rows.length >= config().get<number>('results.maxRows', 5000)
         ? `Truncated at ${config().get<number>('results.maxRows', 5000)} rows.`

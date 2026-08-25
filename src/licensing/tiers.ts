@@ -67,6 +67,7 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'editor.execute',     tier: 'free', summary: 'Run SQL and read the results grid' },
   { id: 'editor.cancel',      tier: 'free', summary: 'Cancel a running query, stopping it on the server' },
   { id: 'editor.export',      tier: 'free', summary: 'Export results as CSV or JSON' },
+  { id: 'editor.history',     tier: 'free', summary: 'Query history and saved queries — statements only, never results, and never off this machine' },
   { id: 'plsql.run',          tier: 'free', summary: 'Run PL/SQL blocks and read compile errors from ALL_ERRORS' },
   { id: 'explain.basic',      tier: 'free', summary: 'Text explain plan (EXPLAIN PLAN + DBMS_XPLAN.DISPLAY)' },
   { id: 'safety.readOnly',    tier: 'free', summary: 'Read-only enforcement: our own SQL guard plus SET TRANSACTION READ ONLY' },
@@ -223,9 +224,6 @@ export const PLANNED: readonly PlannedCapability[] = [
   // --- free depth: where the daily loop is fought (PD-7) --------------------
   // Free on purpose and not as a concession: the grid and the history are what a
   // user compares against the official extension on day one.
-  { id: 'editor.history', tier: 'free', pillar: 'free-depth',
-    summary: 'Query history and saved queries',
-    builtOn: 'local storage only' },
   { id: 'editor.gridChart', tier: 'free', pillar: 'free-depth',
     summary: 'Chart, transpose and group results in the grid',
     builtOn: 'the results already fetched' },

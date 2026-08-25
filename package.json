@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -132,6 +132,24 @@
         "enablement": "auspexlens.connected"
       },
       {
+        "command": "auspexlens.queryHistory",
+        "title": "Query history",
+        "category": "AuspexLens",
+        "icon": "$(history)"
+      },
+      {
+        "command": "auspexlens.saveQuery",
+        "title": "Save query",
+        "category": "AuspexLens",
+        "icon": "$(save)"
+      },
+      {
+        "command": "auspexlens.openSavedQuery",
+        "title": "Open saved query",
+        "category": "AuspexLens",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "auspexlens.explainQuery",
         "title": "Explain plan",
         "category": "AuspexLens",
@@ -253,6 +271,11 @@
           "command": "auspexlens.statusMenu",
           "when": "view == auspexlens.explorer && auspexlens.connected",
           "group": "3_state@1"
+        },
+        {
+          "command": "auspexlens.queryHistory",
+          "when": "view == auspexlens.explorer",
+          "group": "3_state@2"
         }
       ],
       "editor/context": [
@@ -270,6 +293,16 @@
           "command": "auspexlens.cancelQuery",
           "when": "editorLangId == sql || editorLangId == plsql",
           "group": "auspexlens@3"
+        },
+        {
+          "command": "auspexlens.saveQuery",
+          "when": "editorLangId == sql || editorLangId == plsql",
+          "group": "auspexlens@4"
+        },
+        {
+          "command": "auspexlens.queryHistory",
+          "when": "editorLangId == sql || editorLangId == plsql",
+          "group": "auspexlens@4"
         }
       ],
       "commandPalette": [

@@ -347,3 +347,59 @@ describe('a running query can be stopped', () => {
     expect(src.slice(at, at + 400)).toContain('Query cancelled');
   });
 });
+
+describe('history and saved queries', () => {
+  it('contributes all three commands', () => {
+    for (const id of ['auspexlens.queryHistory', 'auspexlens.saveQuery',
+                      'auspexlens.openSavedQuery']) {
+      expect(c.commands.some((x) => x.command === id), id).toBe(true);
+    }
+  });
+
+  it('leaves them usable while disconnected', () => {
+    // Recalling what you wrote is not a database operation, and wanting it
+    // before you connect is the normal case — gating these would make the list
+    // vanish exactly when someone is looking for the query that connects.
+    for (const id of ['auspexlens.queryHistory', 'auspexlens.saveQuery',
+                      'auspexlens.openSavedQuery']) {
+      const cmd = c.commands.find((x) => x.command === id)!;
+      expect(cmd.enablement, `${id} must not need a connection`).toBeUndefined();
+    }
+  });
+
+  it('records a statement only after it has actually run — in BOTH branches', () => {
+    // A query the guard refused was never run, and putting it in "what I ran" is
+    // a lie the list cannot correct. There are two paths that reach the database
+    // and each has to record after its own await, not after the other one's —
+    // the first version of this test compared one index against the whole
+    // function and failed on the branch that is simply written first.
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    const body = src.slice(src.indexOf('async function runFromEditor'));
+
+    const explainAt = body.indexOf('await explainPlan(');
+    const rememberAfterExplain = body.indexOf('options.remember?.(', explainAt);
+    expect(explainAt, 'the explain branch is gone').toBeGreaterThan(0);
+    expect(rememberAfterExplain, 'explain does not record').toBeGreaterThan(explainAt);
+
+    const runAt = body.indexOf('executeReadOnly(conn, sql');
+    const rememberAfterRun = body.indexOf('options.remember?.(', runAt);
+    expect(runAt, 'the query branch is gone').toBeGreaterThan(0);
+    expect(rememberAfterRun, 'the query branch does not record').toBeGreaterThan(runAt);
+  });
+
+  it('stores history globally, since a connection is global too', () => {
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    expect(src).toContain('globalState');
+    expect(src).not.toMatch(/workspaceState\.get<HistoryEntry/);
+  });
+
+  it('opens a recalled statement instead of running it', () => {
+    // Running someone's old query the instant they click it is exactly the
+    // surprise this product exists to avoid.
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    const at = src.indexOf("'auspexlens.queryHistory'");
+    const body = src.slice(at, at + 1800);
+    expect(body).toContain('openTextDocument');
+    expect(body).not.toContain('executeReadOnly');
+  });
+});
