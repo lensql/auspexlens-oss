@@ -3,6 +3,28 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.4.0] - 2026-08-25
+
+The explorer becomes usable. 1.3.0 fixed the palette, the icon and the empty
+view; this fixes the panel you actually work in.
+
+- **Right-click now does something.** Tables, views, packages and procedures get
+  a context menu: **Select the first 100 rows**, **Open source**, and **Copy
+  qualified name**. The preview is also a single click on the row itself. Before
+  this release the explorer had no context menu at all.
+- **Refresh.** There was no way to ask the explorer to re-read the catalog, so an
+  object created in another session never appeared until you reconnected. It is
+  now a button in the panel's toolbar, and on a schema's context menu.
+- **Copy qualified name** copies `SCHEMA.OBJECT`, not the bare label — an
+  unqualified name resolves against your own schema and can silently point at a
+  different object.
+- **The toolbar is grouped**: refresh and find as buttons, connections and
+  container actions in their own sections, instead of everything in one row.
+- Selecting the first 100 rows **opens the statement in an editor rather than
+  running it**. You see exactly what will be sent, you can change it first, and
+  you run it the same way you run anything else — there is one path to the
+  database, not a private one for the explorer.
+
 ## [1.3.0] - 2026-08-25
 
 The interface, brought up to the standard the rest of the product was already

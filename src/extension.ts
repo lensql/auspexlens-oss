@@ -374,6 +374,56 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       if (picked) vscode.window.showInformationMessage(`${picked.description} — ${picked.label}`);
     }),
 
+    /**
+     * Refresh the explorer.
+     *
+     * The tree caches nothing, but it also re-reads nothing on its own: a table
+     * created in another session, or a package recompiled, simply does not
+     * appear. The provider has had a `refresh()` since it was written and until
+     * now there was no way for a person to call it — the button existed only for
+     * `connect` and `disconnect` to press.
+     */
+    vscode.commands.registerCommand('auspexlens.refreshExplorer', () => treeProvider.refresh()),
+
+    /**
+     * Copy an object's name, qualified the way you would paste it into SQL.
+     *
+     * The smallest useful thing an explorer can do, and the one a person reaches
+     * for constantly. Qualified with the owner because an unqualified name only
+     * resolves for its own schema, and pasting one that silently resolves to a
+     * *different* object is worse than pasting nothing.
+     */
+    vscode.commands.registerCommand('auspexlens.copyName', async (node: TreeNode) => {
+      if (!node) return;
+      const name = node.kind === 'column' && node.objectName
+        ? node.label
+        : [node.owner, node.objectName ?? (node.kind === 'schema' ? undefined : node.label)]
+            .filter(Boolean).join('.') || node.label;
+      await vscode.env.clipboard.writeText(name);
+      void vscode.window.setStatusBarMessage(`Copied ${name}`, 2000);
+    }),
+
+    /**
+     * Open a SELECT for this object, ready to run.
+     *
+     * A document rather than an immediate execution, and that is the point: the
+     * statement is the thing being taught. You see exactly what will be sent,
+     * you can edit it before sending, and running it is the same Ctrl/Cmd+Enter
+     * as any other query — one path to the database, not a private one for the
+     * explorer.
+     *
+     * ROWNUM rather than FETCH FIRST so nothing here depends on a version newer
+     * than the 19c this product supports — the same rule the Pro monitor follows.
+     */
+    vscode.commands.registerCommand('auspexlens.previewObject', async (node: TreeNode) => {
+      if (!node?.owner || !node.objectName) return;
+      const sql =
+        `-- ${node.owner}.${node.objectName}\n` +
+        `SELECT * FROM (SELECT * FROM ${node.owner}.${node.objectName}) WHERE ROWNUM <= 100;\n`;
+      const doc = await vscode.workspace.openTextDocument({ content: sql, language: 'sql' });
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
+
     vscode.commands.registerCommand('auspexlens.openSource', async (node: TreeNode) => {
       const conn = connections.active();
       const q = node && sourceQueryFor(node);

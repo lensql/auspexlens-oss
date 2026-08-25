@@ -25,9 +25,9 @@ const ROOT = join(__dirname, '..');
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
   icon: string;
   contributes: {
-    commands: { command: string; title: string; category?: string; enablement?: string }[];
+    commands: { command: string; title: string; category?: string; enablement?: string; icon?: string }[];
     keybindings?: { command: string; key: string; mac?: string; when?: string }[];
-    menus?: Record<string, { command: string; when?: string }[]>;
+    menus?: Record<string, { command?: string; submenu?: string; when?: string; group?: string }[]>;
     views: Record<string, { id: string }[]>;
     viewsContainers: { activitybar: { id: string; title: string; icon: string }[] };
     viewsWelcome?: { view: string; contents: string }[];
@@ -168,5 +168,85 @@ describe('running a query', () => {
     const binding = (c.keybindings ?? []).find((k) => k.command === 'auspexlens.runQuery')!;
     expect(binding.when).toContain('editorTextFocus');
     expect(binding.when).toMatch(/editorLangId/);
+  });
+});
+
+describe('the explorer toolbar and its right-click menu', () => {
+  const title = c.menus?.['view/title'] ?? [];
+  const item = c.menus?.['view/item/context'] ?? [];
+
+  it('has a refresh button, which the tree could never be told to do', () => {
+    // The provider has had refresh() since it was written, and until 1.3.0 only
+    // `connect` and `disconnect` could call it. A table created in another
+    // session simply never appeared.
+    const refresh = title.find((m) => m.command === 'auspexlens.refreshExplorer');
+    expect(refresh, 'no refresh in the view toolbar').toBeDefined();
+    expect(refresh!.group).toMatch(/^navigation/);
+  });
+
+  it('gives every toolbar icon-group entry an icon, or it falls into the overflow', () => {
+    // An entry in `navigation` without an icon is not a toolbar button — VS Code
+    // drops it into the "..." menu, which is where things go to be unfindable.
+    for (const m of title.filter((x) => (x.group ?? '').startsWith('navigation'))) {
+      const cmd = c.commands.find((x) => x.command === m.command)!;
+      expect(cmd.icon, `${m.command} sits in navigation with no icon`).toBeDefined();
+    }
+  });
+
+  it('separates the toolbar into groups instead of one bucket', () => {
+    const groups = new Set(title.map((m) => (m.group ?? '').split('@')[0]));
+    expect(groups.size, 'every toolbar entry is in one group').toBeGreaterThan(1);
+  });
+
+  it('has a right-click menu at all — the explorer had none', () => {
+    // The single largest gap the 2026-08-25 audit found. RedLens has seven
+    // entries here; AuspexLens had the key absent entirely, so right-clicking a
+    // table did nothing.
+    expect(item.length).toBeGreaterThan(0);
+  });
+
+  it('matches every context entry to a contextValue the tree actually sets', () => {
+    // `getTreeItem` sets contextValue = node.kind. A `when` naming anything else
+    // is a menu entry that can never appear, and nothing would ever say so.
+    const KINDS = ['schema', 'folder', 'object', 'column'];
+    for (const m of item) {
+      const when = m.when ?? '';
+      expect(when, `${m.command} does not scope to this view`).toContain('view == auspexlens.explorer');
+      const named = [...when.matchAll(/viewItem\s*(?:==|=~)\s*\/?\^?\(?([\w|]+)/g)]
+        .flatMap((x) => x[1]!.split('|'));
+      expect(named.length, `${m.command} has no viewItem condition`).toBeGreaterThan(0);
+      for (const k of named) {
+        expect(KINDS, `${m.command} targets "${k}", which no node ever has`).toContain(k);
+      }
+    }
+  });
+
+  it('offers the two things a person wants on a table', () => {
+    const onObject = item.filter((m) => (m.when ?? '').includes('viewItem == object')).map((m) => m.command);
+    expect(onObject).toContain('auspexlens.previewObject');
+    expect(onObject).toContain('auspexlens.openSource');
+  });
+
+  it('promotes one action inline, so the common case is a single click', () => {
+    expect(item.some((m) => m.group === 'inline')).toBe(true);
+  });
+
+  it('keeps node-argument commands out of the palette', () => {
+    // previewObject and copyName take a TreeNode. From the palette they would be
+    // invoked with nothing — the same reason openSource is hidden.
+    const palette = c.menus?.['commandPalette'] ?? [];
+    for (const id of ['auspexlens.previewObject', 'auspexlens.copyName', 'auspexlens.openSource']) {
+      expect(palette.find((m) => m.command === id)?.when, id).toBe('false');
+    }
+  });
+
+  it('never lists a command it does not contribute', () => {
+    const known = new Set(c.commands.map((x) => x.command));
+    for (const [menu, entries] of Object.entries(c.menus ?? {})) {
+      for (const m of entries) {
+        if (!m.command) continue;
+        expect(known.has(m.command), `${menu} lists ${m.command}, which is not contributed`).toBe(true);
+      }
+    }
   });
 });

@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -56,13 +56,15 @@
       {
         "command": "auspexlens.importWallet",
         "title": "Import wallet (.zip or folder)",
-        "category": "AuspexLens"
+        "category": "AuspexLens",
+        "icon": "$(key)"
       },
       {
         "command": "auspexlens.disconnect",
         "title": "Disconnect",
         "category": "AuspexLens",
-        "enablement": "auspexlens.connected"
+        "enablement": "auspexlens.connected",
+        "icon": "$(debug-disconnect)"
       },
       {
         "command": "auspexlens.showContainer",
@@ -97,10 +99,32 @@
         "enablement": "auspexlens.connected"
       },
       {
+        "command": "auspexlens.refreshExplorer",
+        "title": "Refresh explorer",
+        "category": "AuspexLens",
+        "icon": "$(refresh)",
+        "enablement": "auspexlens.connected"
+      },
+      {
+        "command": "auspexlens.previewObject",
+        "title": "Select the first 100 rows",
+        "category": "AuspexLens",
+        "icon": "$(table)",
+        "enablement": "auspexlens.connected"
+      },
+      {
+        "command": "auspexlens.copyName",
+        "title": "Copy qualified name",
+        "category": "AuspexLens",
+        "icon": "$(copy)",
+        "enablement": "auspexlens.connected"
+      },
+      {
         "command": "auspexlens.openSource",
         "title": "Open source",
         "category": "AuspexLens",
-        "enablement": "auspexlens.connected"
+        "enablement": "auspexlens.connected",
+        "icon": "$(code)"
       },
       {
         "command": "auspexlens.forgetCredentials",
@@ -124,14 +148,39 @@
     "menus": {
       "view/title": [
         {
-          "command": "auspexlens.connect",
-          "when": "view == auspexlens.explorer",
+          "command": "auspexlens.refreshExplorer",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
           "group": "navigation@1"
         },
         {
           "command": "auspexlens.findObject",
-          "when": "view == auspexlens.explorer",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
           "group": "navigation@2"
+        },
+        {
+          "command": "auspexlens.connect",
+          "when": "view == auspexlens.explorer",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "auspexlens.importWallet",
+          "when": "view == auspexlens.explorer",
+          "group": "1_connection@2"
+        },
+        {
+          "command": "auspexlens.disconnect",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
+          "group": "1_connection@3"
+        },
+        {
+          "command": "auspexlens.showContainer",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
+          "group": "2_container@1"
+        },
+        {
+          "command": "auspexlens.addRootConnection",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
+          "group": "2_container@2"
         }
       ],
       "editor/context": [
@@ -174,6 +223,45 @@
         {
           "command": "auspexlens.openSource",
           "when": "false"
+        },
+        {
+          "command": "auspexlens.refreshExplorer",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.previewObject",
+          "when": "false"
+        },
+        {
+          "command": "auspexlens.copyName",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "auspexlens.previewObject",
+          "when": "view == auspexlens.explorer && viewItem == object",
+          "group": "inline"
+        },
+        {
+          "command": "auspexlens.previewObject",
+          "when": "view == auspexlens.explorer && viewItem == object",
+          "group": "1_query@1"
+        },
+        {
+          "command": "auspexlens.openSource",
+          "when": "view == auspexlens.explorer && viewItem == object",
+          "group": "1_query@2"
+        },
+        {
+          "command": "auspexlens.copyName",
+          "when": "view == auspexlens.explorer && viewItem =~ /^(schema|object|column)$/",
+          "group": "2_clipboard"
+        },
+        {
+          "command": "auspexlens.refreshExplorer",
+          "when": "view == auspexlens.explorer && viewItem == schema",
+          "group": "3_view"
         }
       ]
     },
