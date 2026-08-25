@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dependenciesQuery } from '../src/catalog/objects';
+import { join } from 'node:path';
 import {
   childrenQuery, folderNodes, schemaNodes, objectNodes, columnNodes,
   formatType, hasSource, sourceQueryFor, SCHEMA_FOLDERS,
@@ -94,5 +97,45 @@ describe('source', () => {
       kind: 'object', label: 'T', id: 'x', owner: 'HR',
       objectKind: 'TABLE', objectName: 'T', expandable: true,
     })).toBeNull();
+  });
+});
+
+describe('what depends on this object', () => {
+  it('asks both directions in one result', () => {
+    // A person looking at a table wants both, and asking twice makes them
+    // assemble the picture themselves.
+    const q = dependenciesQuery('AUSPEXLENS', 'DEMO_ORDERS');
+    expect(q.sql).toContain('UNION ALL');
+    expect(q.sql).toContain("'used by'");
+    expect(q.sql).toContain("'uses'");
+  });
+
+  it('binds the owner and the name rather than concatenating them', () => {
+    // Object names come from the database and are therefore hostile input — the
+    // rule every catalog query in this file follows.
+    const q = dependenciesQuery("X'; DROP TABLE T --", 'N');
+    expect(q.binds).toMatchObject({ owner: "X'; DROP TABLE T --", name: 'N' });
+    expect(q.sql).not.toContain('DROP');
+  });
+
+  it('reads ALL_DEPENDENCIES, so it answers in the user\'s own scope', () => {
+    // Not DBA_DEPENDENCIES: the answer should be what this connection can see,
+    // which is what the user is going to act on.
+    expect(dependenciesQuery('A', 'B').sql.toLowerCase()).toContain('all_dependencies');
+    expect(dependenciesQuery('A', 'B').sql.toLowerCase()).not.toContain('dba_dependencies');
+  });
+
+  it('caps the result with ROWNUM, not FETCH FIRST', () => {
+    expect(dependenciesQuery('A', 'B').sql).toContain('ROWNUM');
+    expect(dependenciesQuery('A', 'B', 50).binds['lim']).toBe(50);
+  });
+
+  it('states its own limit in the source, because the feature invites over-trust', () => {
+    // Oracle records dependencies for STORED objects. Dynamic SQL and
+    // application code are not here and cannot be, and a reader who assumes
+    // otherwise will change a column and break something this never mentioned.
+    const src = readFileSync(join(__dirname, '..', 'src', 'catalog', 'objects.ts'), 'utf8');
+    expect(src).toMatch(/dynamic SQL/);
+    expect(src).toMatch(/not "what breaks"|not "what breaks"/);
   });
 });

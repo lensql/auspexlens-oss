@@ -22,7 +22,7 @@ import { executeReadOnly, explainPlan, explainPlanRows } from './engine/readOnly
 import { assessRisk, needsConfirmation, needsTypedConfirmation, confirmationPhrase } from './engine/statementRisk';
 import { runAnonymousBlock, looksLikePlSql } from './plsql/run';
 import { probePrivileges, privilegeAdvice } from './catalog/privileges';
-import { findObjectQuery } from './catalog/objects';
+import { findObjectQuery, dependenciesQuery} from './catalog/objects';
 import {
   childrenQuery, folderNodes, schemaNodes, objectNodes, columnNodes, sourceQueryFor,
   type TreeNode,
@@ -542,6 +542,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
           ? `Showing the first ${t.columns.length - 1} rows as columns.`
           : undefined,
       });
+    }),
+
+    /**
+     * What references this object, and what it references.
+     *
+     * The question that precedes every schema change, and the one a table alone
+     * cannot answer. Oracle keeps the record; this reads it in the user's own
+     * scope so the answer matches what they can actually act on.
+     */
+    vscode.commands.registerCommand('auspexlens.findUsages', async (node: TreeNode) => {
+      const conn = connections.active();
+      if (!conn || !node?.owner || !node.objectName) return;
+      const q = dependenciesQuery(node.owner, node.objectName);
+      try {
+        const res = await executeReadOnly(conn, q.sql, { binds: q.binds, mask: maskPolicy() });
+        output.appendLine('');
+        output.appendLine(`=== ${node.owner}.${node.objectName} — dependencies ===`);
+        if (res.rows.length === 0) {
+          // An answer, not an absence — and one worth qualifying, because the
+          // catalog only knows about stored objects.
+          output.appendLine('   Nothing in the database references it, and it references nothing.');
+          output.appendLine('   Oracle records dependencies for stored objects only: code in your');
+          output.appendLine('   application, or SQL built at runtime, cannot appear here.');
+        } else {
+          output.appendLine(`   ${res.columns.join('\t')}`);
+          for (const row of res.rows) {
+            output.appendLine(`   ${row.map((c) => String(c ?? '')).join('\t')}`);
+          }
+        }
+        output.show(true);
+      } catch (e) {
+        void vscode.window.showWarningMessage((e as Error).message);
+      }
     }),
 
     vscode.commands.registerCommand('auspexlens.showDocs', () =>

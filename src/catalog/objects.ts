@@ -121,3 +121,39 @@ export function findObjectQuery(term: string, limit = 200): CatalogQuery {
     binds: { term, lim: limit },
   };
 }
+
+/**
+ * What depends on this object — and what it depends on.
+ *
+ * "Can I change this column?" is unanswerable from a table alone, and it is the
+ * question that precedes every schema change. Oracle records the answer:
+ * `ALL_DEPENDENCIES` links every view, package, procedure, function and trigger
+ * to what it references.
+ *
+ * **Both directions, in one result**, because a person looking at an object wants
+ * both and asking twice makes them assemble the picture themselves. The
+ * `direction` column says which is which.
+ *
+ * `ALL_DEPENDENCIES` needs no grant beyond the `SELECT` the explorer already
+ * requires — it shows what this user can see, which is the correct scope for an
+ * answer a user is going to act on.
+ *
+ * The honest limit, worth stating because the feature invites over-trust: Oracle
+ * records dependencies for **stored** objects. A dependency that lives only in
+ * application code, or in dynamic SQL built at runtime, is not here and cannot
+ * be. This answers "what in the database references it", not "what breaks".
+ */
+export function dependenciesQuery(owner: string, name: string, limit = 500): CatalogQuery {
+  return {
+    sql: `SELECT * FROM (
+            SELECT 'used by' AS direction, owner, name, type
+              FROM all_dependencies
+             WHERE referenced_owner = :owner AND referenced_name = :name
+            UNION ALL
+            SELECT 'uses' AS direction, referenced_owner, referenced_name, referenced_type
+              FROM all_dependencies
+             WHERE owner = :owner AND name = :name
+          ) WHERE ROWNUM <= :lim`,
+    binds: { owner, name, lim: limit },
+  };
+}

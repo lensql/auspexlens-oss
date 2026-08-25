@@ -3,6 +3,18 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.12.0] - 2026-08-25
+
+- **Find usages** — right-click any object in the explorer to see what
+  references it and what it references, in one list. It is the question that
+  comes before every schema change and a table alone cannot answer it.
+  - It reads what **your** connection can see, so the answer matches what you are
+    able to act on.
+  - When nothing comes back, it says why that may be: Oracle records
+    dependencies for stored objects, so code in your application or SQL built at
+    runtime cannot appear. This answers what in the database references an
+    object — not what will break.
+
 ## [1.11.0] - 2026-08-25
 
 - **Transpose results** — one row per column, one column per record. The view you

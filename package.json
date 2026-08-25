@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -198,6 +198,13 @@
         "icon": "$(code)"
       },
       {
+        "command": "auspexlens.findUsages",
+        "title": "Find usages",
+        "category": "AuspexLens",
+        "icon": "$(references)",
+        "enablement": "auspexlens.connected"
+      },
+      {
         "command": "auspexlens.forgetCredentials",
         "title": "Forget stored credentials for a connection",
         "category": "AuspexLens"
@@ -376,6 +383,10 @@
         {
           "command": "auspexlens.transposeResults",
           "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.findUsages",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -393,6 +404,11 @@
           "command": "auspexlens.openSource",
           "when": "view == auspexlens.explorer && viewItem == object",
           "group": "1_query@2"
+        },
+        {
+          "command": "auspexlens.findUsages",
+          "when": "view == auspexlens.explorer && viewItem == object",
+          "group": "1_query@3"
         },
         {
           "command": "auspexlens.copyName",

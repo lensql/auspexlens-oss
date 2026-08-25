@@ -64,6 +64,7 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'explorer.objects',   tier: 'free', summary: 'Browse tables, views, sequences, packages, procedures, functions and triggers' },
   { id: 'explorer.source',    tier: 'free', summary: 'Read the source of PL/SQL objects' },
   { id: 'explorer.find',      tier: 'free', summary: 'Fuzzy "find database object" across large schemas' },
+  { id: 'explorer.usages',    tier: 'free', summary: 'What references an object, and what it references — the question before every schema change' },
   { id: 'editor.execute',     tier: 'free', summary: 'Run SQL and read the results grid' },
   { id: 'editor.cancel',      tier: 'free', summary: 'Cancel a running query, stopping it on the server' },
   { id: 'editor.export',      tier: 'free', summary: 'Export results as CSV or JSON' },
