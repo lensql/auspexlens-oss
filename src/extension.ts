@@ -32,7 +32,7 @@ import { startBridge, type BridgeHandle } from './mcp/bridgeServer';
 import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
 import { API_VERSION, type AuspexLensApi } from './api';
-import { CONTAINER_SQL, parseContainer, describeContainer } from './engine/container';
+import { CONTAINER_SQL, parseContainer, describeContainer, shortContainerLabel } from './engine/container';
 import { proposeRootProfile, proposePdbProfile, rootProfileAdvice } from './connections/rootProfile';
 
 let bridge: BridgeHandle | undefined;
@@ -86,8 +86,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
 
   // --- the explorer ---------------------------------------------------------
   const treeProvider = new ObjectTreeProvider(connections, output);
+  /**
+   * The explorer view itself, kept so its header can say where you are.
+   *
+   * A tree of schemas looks identical in every container, which is the problem:
+   * `SALES` in the root and `SALES` in a PDB are different data behind the same
+   * label. VS Code puts a view's `description` beside its title, so the answer
+   * sits permanently above the tree — no extra root node to expand, and no click
+   * to find out.
+   */
+  let explorerView: vscode.TreeView<TreeNode> | undefined;
   context.subscriptions.push(
-    vscode.window.createTreeView('auspexlens.explorer', { treeDataProvider: treeProvider }),
+    (explorerView = vscode.window.createTreeView('auspexlens.explorer', {
+      treeDataProvider: treeProvider,
+    })),
   );
 
   // --- the MCP bridge -------------------------------------------------------
@@ -345,6 +357,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
             const res = await executeReadOnly(conn, CONTAINER_SQL, { mask: maskPolicy() });
             const container = parseContainer(res.rows[0]);
             output.appendLine(describeContainer(container));
+            // The header, from the same read. One query, two places that need it.
+            if (explorerView) explorerView.description = shortContainerLabel(container);
             if (container?.isRoot) {
               void vscode.window.showWarningMessage(
                 `Connected to ${container.name} — the ROOT of ${container.dbName}, not a pluggable ` +
@@ -383,6 +397,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       if (!id) return;
       await connections.disconnect(id);
       await setConnected(false);
+      // A stale container name over an empty tree is worse than none: it says
+      // you are somewhere you are not.
+      if (explorerView) explorerView.description = undefined;
       treeProvider.refresh();
     }),
 

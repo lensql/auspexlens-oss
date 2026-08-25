@@ -3,6 +3,14 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.6.0] - 2026-08-25
+
+- **The explorer header says which container you are in.** A tree of schemas
+  looks identical in every container, and `SALES` in the CDB root is not `SALES`
+  in a pluggable database. The name now sits beside the panel's title — nothing
+  to expand, nothing to click — and clears when you disconnect, because a stale
+  container name over an empty tree says you are somewhere you are not.
+
 ## [1.5.0] - 2026-08-25
 
 - **Add a connection to a pluggable database**, derived from the one you are on

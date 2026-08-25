@@ -86,6 +86,7 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'multitenant.monitor',     tier: 'pro', summary: 'Per-PDB metrics and Resource Manager limits, from views no pack licenses' },
   { id: 'multitenant.crossQuery',  tier: 'pro', summary: 'One catalog question asked of every open container at once' },
   { id: 'multitenant.scriptAdmin', tier: 'pro', summary: 'Generates PDB administration DDL for a DBA to run; never executes it' },
+  { id: 'multitenant.appContainers', tier: 'pro', summary: 'Application containers: the root, the tenants beneath it, and which application version each is on' },
 
   // --- pro: incidents — reading the past ------------------------------------
   // A plain SELECT (`AS OF TIMESTAMP`), so it passes the read-only guard
@@ -132,6 +133,7 @@ export const NEEDS_CATALOG_ROLE: readonly string[] = [
   'explain.visual',
   'multitenant.explorer',
   'multitenant.monitor',
+  'multitenant.appContainers',
   'governance.posture',
   // `multitenant.crossQuery` is deliberately ABSENT: measured 2026-08-23, the
   // CONTAINERS() clause parses for an account with no grant at all, because it
