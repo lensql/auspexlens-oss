@@ -27,7 +27,7 @@ import {
   childrenQuery, folderNodes, schemaNodes, objectNodes, columnNodes, sourceQueryFor,
   type TreeNode,
 } from './explorer/tree';
-import { renderGrid } from './grid/render';
+import { renderGrid, transpose } from './grid/render';
 import { startBridge, type BridgeHandle } from './mcp/bridgeServer';
 import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
@@ -135,6 +135,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
     context.globalState.update(HISTORY_KEY, pushHistory(history(), {
       sql, at: Date.now(), profileId: connections.activeProfileId, elapsedMs,
     }));
+
+  /**
+   * The last result, kept only to re-render it sideways.
+   *
+   * In memory and never persisted — history stores statements, never rows, and
+   * this must not become the exception that quietly reintroduces a row cache.
+   * It is cleared on disconnect for the same reason.
+   */
+  let lastResult: { columns: string[]; rows: unknown[][]; maskedColumns: string[] } | undefined;
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   status.command = 'auspexlens.statusMenu';
@@ -503,6 +512,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       await vscode.window.showTextDocument(doc, { preview: false });
     }),
 
+    /**
+     * Show the last result on its side.
+     *
+     * A re-render rather than an interaction: this grid runs with no scripts at
+     * all, which the threat model names as a control (T15), and copying an
+     * interactive grid would mean giving that up in the product whose pitch is
+     * that pointing a language model at it is defensible.
+     */
+    vscode.commands.registerCommand('auspexlens.transposeResults', async () => {
+      if (!lastResult) {
+        void vscode.window.showInformationMessage('Run a query first — there is nothing to transpose.');
+        return;
+      }
+      const t = transpose(lastResult.columns, lastResult.rows);
+      const panel = vscode.window.createWebviewPanel(
+        'auspexlens.results', 'AuspexLens results (transposed)',
+        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+        { enableScripts: false },
+      );
+      panel.webview.html = renderGrid({
+        columns: t.columns,
+        rows: t.rows,
+        // The masked columns are now rows, so the header flag no longer applies;
+        // the values themselves were already masked in the engine.
+        maskedColumns: [],
+        cspSource: panel.webview.cspSource,
+        note: t.truncated
+          ? `Showing the first ${t.columns.length - 1} rows as columns.`
+          : undefined,
+      });
+    }),
+
     vscode.commands.registerCommand('auspexlens.showDocs', () =>
       vscode.env.openExternal(vscode.Uri.parse(DOCS_URL)),
     ),
@@ -618,6 +659,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       // A stale container name over an empty tree is worse than none: it says
       // you are somewhere you are not.
       if (explorerView) explorerView.description = undefined;
+      lastResult = undefined;
       refreshStatus();
       treeProvider.refresh();
     }),
@@ -776,7 +818,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
     }),
 
     vscode.commands.registerCommand('auspexlens.runQuery', () =>
-      runFromEditor(connections, output, { explain: false, remember }),
+      runFromEditor(connections, output, { explain: false, remember, keepResult: (r) => { lastResult = r; } }),
     ),
     vscode.commands.registerCommand('auspexlens.explainQuery', () =>
       runFromEditor(connections, output, { explain: true, remember }),
@@ -929,6 +971,8 @@ async function runFromEditor(
      * run, and putting it in "what I ran" would be a lie the list cannot correct.
      */
     remember?: (sql: string, elapsedMs?: number) => Thenable<void>;
+    /** Hand the rows back so they can be re-rendered sideways. In memory only. */
+    keepResult?: (r: { columns: string[]; rows: unknown[][]; maskedColumns: string[] }) => void;
   },
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -1005,6 +1049,7 @@ async function runFromEditor(
     );
     const elapsedMs = Date.now() - started;
     void options.remember?.(sql, elapsedMs);
+    options.keepResult?.({ columns: res.columns, rows: res.rows, maskedColumns: res.masked.columns });
 
     panel.webview.html = renderGrid({
       columns: res.columns,

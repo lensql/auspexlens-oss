@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { renderGrid } from '../src/grid/render';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { renderGrid, transpose, TRANSPOSE_LIMIT } from '../src/grid/render';
 
 const base = { maskedColumns: [], cspSource: 'vscode-resource:' };
 
@@ -60,5 +62,54 @@ describe('what the grid tells the user', () => {
   it('shows a truncation note when given one', () => {
     const html = renderGrid({ ...base, columns: ['C'], rows: [], note: 'Truncated at 5000 rows.' });
     expect(html).toContain('Truncated at 5000 rows.');
+  });
+});
+
+describe('transposing a wide result', () => {
+  const columns = ['ID', 'NAME', 'EMAIL'];
+  const rows = [[1, 'Ada', 'ada@x.invalid'], [2, 'Grace', 'grace@x.invalid']];
+
+  it('puts the column names down the left edge', () => {
+    // Where a person scans them, when a SELECT * returns forty columns.
+    const t = transpose(columns, rows);
+    expect(t.columns).toEqual(['Column', 'Row 1', 'Row 2']);
+    expect(t.rows.map((r) => r[0])).toEqual(['ID', 'NAME', 'EMAIL']);
+  });
+
+  it('keeps each record in its own column, in order', () => {
+    const t = transpose(columns, rows);
+    expect(t.rows[1]).toEqual(['NAME', 'Ada', 'Grace']);
+  });
+
+  it('caps the columns, because a transposed row becomes a column', () => {
+    // A thousand-row answer would otherwise become a thousand-column table.
+    const many = Array.from({ length: 80 }, (_, i) => [i, `n${i}`, `e${i}`]);
+    const t = transpose(columns, many);
+    expect(t.columns.length).toBe(TRANSPOSE_LIMIT + 1);
+    expect(t.truncated).toBe(true);
+  });
+
+  it('says nothing was truncated when nothing was', () => {
+    expect(transpose(columns, rows).truncated).toBe(false);
+  });
+
+  it('preserves null and undefined rather than turning them into text', () => {
+    // The renderer is what decides how a NULL looks; a transform that decided
+    // for it would make two places responsible for one appearance.
+    const t = transpose(['A'], [[null], [undefined]]);
+    expect(t.rows[0]).toEqual(['A', null, undefined]);
+  });
+
+  it('handles an empty result without inventing a shape', () => {
+    expect(transpose(columns, [])).toEqual({
+      columns: ['Column'], rows: [['ID'], ['NAME'], ['EMAIL']], truncated: false,
+    });
+  });
+
+  it('runs entirely on rows already fetched', () => {
+    // No second query: the point of doing this on our side is that nothing new
+    // reaches the database, and the no-scripts webview keeps its CSP.
+    const src = readFileSync(join(__dirname, '..', 'src', 'grid', 'render.ts'), 'utf8');
+    expect(src).not.toMatch(/executeReadOnly|conn\./);
   });
 });

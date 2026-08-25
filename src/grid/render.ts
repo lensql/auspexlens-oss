@@ -24,6 +24,42 @@ export interface GridInput {
   cspSource: string;
 }
 
+/**
+ * Turn a result on its side: one row per column, one column per record.
+ *
+ * The view you want when a query returns three rows of forty columns, which is
+ * every `SELECT *` on a real table. It is a pure transform of what was already
+ * fetched — no second query, and nothing new reaches the database.
+ *
+ * **Rendered on this side rather than in the webview, deliberately.** RedLens's
+ * grid runs with `enableScripts: true`; this one does not, and that is a control
+ * the threat model names: T15 pairs `escapeHtml` on every value with a CSP that
+ * omits `script-src` entirely for read-only views. Copying RedLens's interactive
+ * grid would mean giving that up in the product whose whole pitch is that you can
+ * point a language model at it. Transposing before the HTML is written costs a
+ * re-render and keeps the guarantee whole.
+ *
+ * Capped because a transposed result has one column per ROW: a thousand-row
+ * answer would become a thousand-column table, which no window can show and no
+ * person can read.
+ */
+export const TRANSPOSE_LIMIT = 50;
+
+export function transpose(
+  columns: readonly string[],
+  rows: readonly unknown[][],
+  limit = TRANSPOSE_LIMIT,
+): { columns: string[]; rows: unknown[][]; truncated: boolean } {
+  const kept = rows.slice(0, limit);
+  return {
+    // The first column holds what used to be the header, so the names stay
+    // readable down the left edge where a person scans them.
+    columns: ['Column', ...kept.map((_, i) => `Row ${i + 1}`)],
+    rows: columns.map((name, c) => [name, ...kept.map((r) => r[c])]),
+    truncated: rows.length > kept.length,
+  };
+}
+
 export function renderGrid(input: GridInput): string {
   const { columns, rows, maskedColumns, cspSource } = input;
 

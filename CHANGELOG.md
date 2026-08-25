@@ -3,6 +3,17 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.11.0] - 2026-08-25
+
+- **Transpose results** — one row per column, one column per record. The view you
+  want whenever a `SELECT *` returns three rows of forty columns.
+  - It re-renders what was already fetched: no second query, and nothing new
+    reaches the database.
+  - Done without adding scripts to the results view. That view runs with **no
+    `script-src` at all**, which is one of the controls that makes pointing a
+    language model at this extension defensible, and it was not worth trading for
+    a nicer grid.
+
 ## [1.10.0] - 2026-08-25
 
 - **Query history**, so the statement you ran twenty minutes ago is not gone.
