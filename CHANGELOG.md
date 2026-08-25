@@ -3,6 +3,13 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.5.0] - 2026-08-25
+
+- **Add a connection to a pluggable database**, derived from the one you are on
+  — the mirror of the CDB-root connection added in 1.2.0. Looking at the estate
+  from the root and then having to type each PDB's connection by hand was half a
+  feature. Free, like every connection in AuspexLens.
+
 ## [1.4.0] - 2026-08-25
 
 The explorer becomes usable. 1.3.0 fixed the palette, the icon and the empty

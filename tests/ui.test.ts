@@ -250,3 +250,31 @@ describe('the explorer toolbar and its right-click menu', () => {
     }
   });
 });
+
+describe('no exported capability without a way to reach it', () => {
+  it('wires every connection-deriving helper to a command', () => {
+    // proposePdbProfile shipped in 1.4.0 exported and tested with nothing calling
+    // it — dead code inside a published .vsix. This is the assertion that would
+    // have caught it: the module exists to serve commands, so each of its two
+    // directions must be reachable from one.
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    for (const fn of ['proposeRootProfile', 'proposePdbProfile']) {
+      expect(src, `${fn} is exported but nothing in extension.ts calls it`).toContain(`${fn}(`);
+    }
+    for (const id of ['auspexlens.addRootConnection', 'auspexlens.addPdbConnection']) {
+      expect(c.commands.some((x) => x.command === id), id).toBe(true);
+    }
+  });
+
+  it('keeps both directions free, because connections are never the paid half', () => {
+    // The rule the root connection established: a limitation whose only exit is
+    // another connection cannot have that exit behind the paywall it feeds.
+    const pro = JSON.parse(
+      readFileSync(join(ROOT, '..', 'pro', 'package.json'), 'utf8'),
+    ) as { contributes: { commands: { command: string }[] } };
+    const proIds = new Set(pro.contributes.commands.map((x) => x.command));
+    for (const id of ['auspexlens.addRootConnection', 'auspexlens.addPdbConnection']) {
+      expect(proIds.has(id), `${id} must not be a Pro command`).toBe(false);
+    }
+  });
+});

@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -75,6 +75,12 @@
       {
         "command": "auspexlens.addRootConnection",
         "title": "Add a connection to the CDB root",
+        "category": "AuspexLens",
+        "enablement": "auspexlens.connected"
+      },
+      {
+        "command": "auspexlens.addPdbConnection",
+        "title": "Add a connection to a pluggable database",
         "category": "AuspexLens",
         "enablement": "auspexlens.connected"
       },
@@ -181,6 +187,11 @@
           "command": "auspexlens.addRootConnection",
           "when": "view == auspexlens.explorer && auspexlens.connected",
           "group": "2_container@2"
+        },
+        {
+          "command": "auspexlens.addPdbConnection",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
+          "group": "2_container@3"
         }
       ],
       "editor/context": [
@@ -235,6 +246,10 @@
         {
           "command": "auspexlens.copyName",
           "when": "false"
+        },
+        {
+          "command": "auspexlens.addPdbConnection",
+          "when": "auspexlens.connected"
         }
       ],
       "view/item/context": [

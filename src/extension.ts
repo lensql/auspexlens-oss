@@ -33,7 +33,7 @@ import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
 import { API_VERSION, type AuspexLensApi } from './api';
 import { CONTAINER_SQL, parseContainer, describeContainer } from './engine/container';
-import { proposeRootProfile, rootProfileAdvice } from './connections/rootProfile';
+import { proposeRootProfile, proposePdbProfile, rootProfileAdvice } from './connections/rootProfile';
 
 let bridge: BridgeHandle | undefined;
 
@@ -214,6 +214,63 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       const choice = await vscode.window.showInformationMessage(
         `Added “${profile.label}”. Connect to it to see every container in this CDB.`,
         'Connect now',
+      );
+      if (choice) void vscode.commands.executeCommand('auspexlens.connect', profile.id);
+    }),
+
+    /**
+     * Add a connection to a pluggable database, derived from the one you are on.
+     *
+     * The mirror of `addRootConnection`, and free for the same reason. The estate
+     * view lists a dozen PDBs and, without this, leaves you to type a connection
+     * by hand for each — the way across is a connection, and connections are
+     * never counted in this product.
+     *
+     * The name arrives as an argument when Pro's inventory offers the button, and
+     * is prompted for otherwise. Base cannot list the containers itself: that
+     * needs the catalog grant, which is what makes the inventory a paid feature.
+     */
+    vscode.commands.registerCommand('auspexlens.addPdbConnection', async (pdbName?: unknown) => {
+      const activeId = connections.activeProfileId;
+      const source = profiles().find((p) => p.id === activeId);
+      if (!source) {
+        void vscode.window.showWarningMessage(
+          'Connect first — the new connection is derived from the one you are on.',
+        );
+        return;
+      }
+
+      const given = typeof pdbName === 'string' ? pdbName : undefined;
+      const name = given ?? await vscode.window.showInputBox({
+        title: 'Add a connection to a pluggable database',
+        prompt: 'The PDB name. Each pluggable database publishes a service of its own name.',
+        placeHolder: 'SALESPDB',
+      });
+      if (name === undefined || name.trim() === '') return;
+
+      let proposal;
+      try {
+        proposal = proposePdbProfile(source, name, profiles().map((p) => p.id));
+      } catch (e) {
+        void vscode.window.showErrorMessage((e as Error).message);
+        return;
+      }
+
+      const user = await vscode.window.showInputBox({
+        title: `User for ${proposal.service}`,
+        value: proposal.profile.user,
+        prompt: 'Carried over from the current connection. A common user can usually reach a PDB; '
+          + 'a user local to another PDB cannot.',
+      });
+      if (user === undefined || user.trim() === '') return;
+
+      const profile = { ...proposal.profile, user: user.trim() };
+      await config().update(
+        'connections.profiles', [...profiles(), profile], vscode.ConfigurationTarget.Global,
+      );
+      output.appendLine(`added PDB profile ${profile.id} -> ${profile.connectString}`);
+      const choice = await vscode.window.showInformationMessage(
+        `Added “${profile.label}”.`, 'Connect now',
       );
       if (choice) void vscode.commands.executeCommand('auspexlens.connect', profile.id);
     }),
