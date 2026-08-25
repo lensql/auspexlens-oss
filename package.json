@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -49,50 +49,156 @@
     "commands": [
       {
         "command": "auspexlens.connect",
-        "title": "AuspexLens: Connect",
+        "title": "Connect",
+        "category": "AuspexLens",
         "icon": "$(plug)"
       },
       {
         "command": "auspexlens.importWallet",
-        "title": "AuspexLens: Import wallet (.zip or folder)"
+        "title": "Import wallet (.zip or folder)",
+        "category": "AuspexLens"
       },
       {
         "command": "auspexlens.disconnect",
-        "title": "AuspexLens: Disconnect"
+        "title": "Disconnect",
+        "category": "AuspexLens",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.showContainer",
-        "title": "AuspexLens: Which container am I in?"
+        "title": "Which container am I in?",
+        "category": "AuspexLens",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.addRootConnection",
-        "title": "AuspexLens: Add a connection to the CDB root"
+        "title": "Add a connection to the CDB root",
+        "category": "AuspexLens",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.runQuery",
-        "title": "AuspexLens: Run query",
-        "icon": "$(play)"
+        "title": "Run query",
+        "category": "AuspexLens",
+        "icon": "$(play)",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.explainQuery",
-        "title": "AuspexLens: Explain plan"
+        "title": "Explain plan",
+        "category": "AuspexLens",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.findObject",
-        "title": "AuspexLens: Find database object",
-        "icon": "$(search)"
+        "title": "Find database object",
+        "category": "AuspexLens",
+        "icon": "$(search)",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.openSource",
-        "title": "AuspexLens: Open source"
+        "title": "Open source",
+        "category": "AuspexLens",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.forgetCredentials",
-        "title": "AuspexLens: Forget stored credentials for a connection"
+        "title": "Forget stored credentials for a connection",
+        "category": "AuspexLens"
       },
       {
         "command": "auspexlens.showDocs",
-        "title": "AuspexLens: Open documentation"
+        "title": "Open documentation",
+        "category": "AuspexLens"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "auspexlens.runQuery",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && (editorLangId == sql || editorLangId == plsql)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "auspexlens.connect",
+          "when": "view == auspexlens.explorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "auspexlens.findObject",
+          "when": "view == auspexlens.explorer",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "auspexlens.runQuery",
+          "when": "editorLangId == sql || editorLangId == plsql",
+          "group": "auspexlens@1"
+        },
+        {
+          "command": "auspexlens.explainQuery",
+          "when": "editorLangId == sql || editorLangId == plsql",
+          "group": "auspexlens@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "auspexlens.disconnect",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.showContainer",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.addRootConnection",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.runQuery",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.explainQuery",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.findObject",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.openSource",
+          "when": "false"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "auspexlens",
+          "title": "AuspexLens",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "auspexlens": [
+        {
+          "id": "auspexlens.explorer",
+          "name": "Database",
+          "contextualTitle": "AuspexLens"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "auspexlens.explorer",
+        "contents": "No connection yet.\n[Connect](command:auspexlens.connect)\n[Import an Oracle wallet](command:auspexlens.importWallet)\nWallets come as the .zip you download from Autonomous Database — AuspexLens reads it and keeps the private key in your OS keychain."
       }
     ],
     "configuration": {
@@ -172,50 +278,6 @@
           }
         }
       }
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "auspexlens",
-          "title": "AuspexLens",
-          "icon": "media/icon.png"
-        }
-      ]
-    },
-    "views": {
-      "auspexlens": [
-        {
-          "id": "auspexlens.explorer",
-          "name": "Database",
-          "contextualTitle": "AuspexLens"
-        }
-      ]
-    },
-    "menus": {
-      "view/title": [
-        {
-          "command": "auspexlens.connect",
-          "when": "view == auspexlens.explorer",
-          "group": "navigation@1"
-        },
-        {
-          "command": "auspexlens.findObject",
-          "when": "view == auspexlens.explorer",
-          "group": "navigation@2"
-        }
-      ],
-      "editor/context": [
-        {
-          "command": "auspexlens.runQuery",
-          "when": "editorLangId == sql || editorLangId == plsql",
-          "group": "auspexlens@1"
-        },
-        {
-          "command": "auspexlens.explainQuery",
-          "when": "editorLangId == sql || editorLangId == plsql",
-          "group": "auspexlens@2"
-        }
-      ]
     },
     "mcpServerDefinitionProviders": [
       {

@@ -3,6 +3,28 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.3.0] - 2026-08-25
+
+The interface, brought up to the standard the rest of the product was already
+held to. Nothing about what AuspexLens *does* changed; a lot about what you see
+did.
+
+- **Commands are grouped properly in the Command Palette.** They now declare a
+  category, which VS Code renders itself — so typing `>AuspexLens` filters to
+  exactly this extension, and the free and paid halves appear as **one product**
+  instead of two. Previously the prefix was typed into each title by hand, which
+  VS Code showed as part of the label and could not group.
+- **The activity bar icon is an SVG.** It was the Marketplace's full-colour PNG,
+  which cannot follow your theme — it was the one icon in the bar that did not
+  match the others. The new one is a 24×24 single-colour vector.
+- **The empty view now tells you where to start.** Before your first connection
+  the panel was blank; it now offers *Connect* and *Import an Oracle wallet* —
+  the two things that work before you have a connection.
+- **Commands that need a connection are hidden until you have one**, instead of
+  being offered and then refusing. `Open source` no longer appears in the palette
+  at all, since it needs an object picked in the explorer.
+- **`Ctrl`/`Cmd`+`Enter` runs the query** in a SQL or PL/SQL editor.
+
 ## [1.2.0] - 2026-08-23
 
 - **“Add a connection to the CDB root”** — a new command that derives a root

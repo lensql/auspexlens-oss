@@ -49,7 +49,26 @@ function maskPolicy() {
   return { mode: config().get<'off' | 'named' | 'all'>('pii.mode', 'named') };
 }
 
+/**
+ * The context key every connection-dependent command is gated on.
+ *
+ * Declared as a constant and set in exactly two places, because a `when` clause
+ * naming a key nothing ever sets is worse than no gate at all: the command
+ * silently disappears for everyone, forever, and the manifest still looks right.
+ * The manifest and this file are the two halves of one decision.
+ */
+const CONNECTED_CONTEXT = 'auspexlens.connected';
+
+async function setConnected(connected: boolean): Promise<void> {
+  await vscode.commands.executeCommand('setContext', CONNECTED_CONTEXT, connected);
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<AuspexLensApi> {
+  // Start closed. VS Code remembers no context keys across windows, and an
+  // unset key is falsy — but saying so explicitly is what makes the state
+  // machine two-sided rather than one.
+  void setConnected(false);
+
   const credentials = new CredentialStore(context.secrets);
   const connections = new ConnectionManager(credentials);
   const output = vscode.window.createOutputChannel(PRODUCT_TAGLINE);
@@ -297,6 +316,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
           }
         },
       );
+      await setConnected(true);
       treeProvider.refresh();
       vscode.window.showInformationMessage(`Connected to ${picked.profile.label}.`);
     }),
@@ -305,6 +325,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       const id = connections.activeProfileId;
       if (!id) return;
       await connections.disconnect(id);
+      await setConnected(false);
       treeProvider.refresh();
     }),
 

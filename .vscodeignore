@@ -29,3 +29,7 @@
 !dist/extension.js
 !dist/mcp-server.js
 !media/icon.png
+# The activity bar icon. A separate file from the tile above on purpose: the
+# Marketplace wants a full-colour raster, the activity bar wants a 24x24
+# single-colour vector it can mask to the user's theme.
+!media/icon.svg

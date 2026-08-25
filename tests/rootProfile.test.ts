@@ -9,7 +9,7 @@
  * host/port/service, and presenting a guess as if it were a fact.
  */
 import { describe, it, expect } from 'vitest';
-import { proposeRootProfile, rootProfileAdvice } from '../src/connections/rootProfile';
+import { proposeRootProfile, proposePdbProfile, rootProfileAdvice } from '../src/connections/rootProfile';
 import type { ProfileConfig } from '../src/connections/manager';
 
 const pdb: ProfileConfig = {
@@ -96,5 +96,60 @@ describe('what the user is told before anything is saved', () => {
     expect(advice).toContain('app_reader');
     expect(advice).toMatch(/common user/);
     expect(advice).toMatch(/editable/);
+  });
+});
+
+describe('the other direction — a PDB reached from the root', () => {
+  const root = {
+    ...pdb, id: 'sales-root', label: 'Sales (prod) — CDB root',
+    connectString: 'db.example.invalid:1521/ORCLCDB', user: 'c##admin',
+  };
+
+  it('swaps the service to the pluggable database', () => {
+    const { profile, service } = proposePdbProfile(root, 'SALESPDB');
+    expect(profile.connectString).toBe('db.example.invalid:1521/SALESPDB');
+    expect(service).toBe('SALESPDB');
+  });
+
+  it('does not let labels accrete into a path', () => {
+    // "Sales (prod) — CDB root — SALESPDB" reads like a breadcrumb, not a name.
+    // One hop of history is enough.
+    expect(proposePdbProfile(root, 'SALESPDB').profile.label).toBe('Sales (prod) — SALESPDB');
+  });
+
+  it('derives a readable id from the container name', () => {
+    expect(proposePdbProfile(root, 'SALESPDB').profile.id).toBe('sales-root-salespdb');
+    expect(proposePdbProfile(root, 'sales$pdb 2').profile.id).toBe('sales-root-sales-pdb-2');
+  });
+
+  it('steps aside rather than overwriting', () => {
+    expect(proposePdbProfile(root, 'SALESPDB', ['sales-root-salespdb']).profile.id)
+      .toBe('sales-root-salespdb-2');
+  });
+
+  it('carries the user over — a common user usually can log in to a PDB', () => {
+    // The reverse of the root case, and the reason both stay editable: "usually"
+    // is not a promise this code is entitled to make about someone's security
+    // model.
+    expect(proposePdbProfile(root, 'SALESPDB').profile.user).toBe('c##admin');
+  });
+
+  it('refuses a wallet profile and an unreadable connect string, like its twin', () => {
+    expect(() => proposePdbProfile({ ...root, kind: 'wallet', connectString: 'alias_high' }, 'X'))
+      .toThrow(/TNS alias/);
+    expect(() => proposePdbProfile({ ...root, connectString: 'nonsense' }, 'X')).toThrow();
+  });
+
+  it('refuses an empty name', () => {
+    expect(() => proposePdbProfile(root, '   ')).toThrow(/No pluggable database name/);
+  });
+
+  it('round-trips: root from a PDB, then that PDB back from the root', () => {
+    // The property that makes the two functions one idea. Going out and back
+    // must land on the same connect string, or one of them is rewriting more
+    // than the service.
+    const there = proposeRootProfile(pdb, 'ORCLCDB').profile;
+    const back = proposePdbProfile(there, 'SALESPDB').profile;
+    expect(back.connectString).toBe(pdb.connectString);
   });
 });

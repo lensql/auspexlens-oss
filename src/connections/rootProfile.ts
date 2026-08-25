@@ -1,5 +1,10 @@
 /**
- * Deriving a CDB-root connection profile from a PDB one.
+ * Deriving a connection profile for another container — in either direction.
+ *
+ * The root from a PDB, and a PDB from the root. They are the same move, and
+ * having only the first was an asymmetry a user would feel immediately: the
+ * estate view lists a dozen pluggable databases and then leaves you to type a
+ * connection by hand for each one.
  *
  * **Why this exists, from Oracle's own documentation.** The *Multitenant
  * Administrator's Guide* is explicit: *"a user whose current container is a PDB
@@ -50,6 +55,80 @@ export interface RootProfileProposal {
 }
 
 /**
+ * Swap the service in an Easy Connect string, keeping everything else.
+ *
+ * The one operation both directions need. Reaching the root from a PDB and
+ * reaching a PDB from the root are the *same* move — Oracle's Multitenant guide
+ * says clients reach the root or a PDB through database services, and each PDB
+ * has a default service named after it — so they share this function rather than
+ * growing two nearly-identical ones that drift.
+ */
+function swapService(connectString: string, service: string): string {
+  const m = EASY_CONNECT.exec(connectString.trim());
+  if (!m?.groups) {
+    throw new Error(
+      `Could not read “${connectString}” as host:port/service, so there is nothing ` +
+        'to swap the service name in. Add the connection by hand.',
+    );
+  }
+  const { host, port, rest } = m.groups;
+  return `${host}${port ? `:${port}` : ''}/${service}${rest ?? ''}`;
+}
+
+/**
+ * Derive a profile for a SIBLING container — a PDB reached from the root, or any
+ * other container whose service you know.
+ *
+ * The mirror image of `proposeRootProfile`, and the half that was missing: the
+ * estate view would list a dozen pluggable databases and leave the user to type
+ * a connection by hand for each. Free for the same reason as its twin —
+ * connections are never counted here, and the way out of "you can only see the
+ * container you connected to" cannot be the paid half.
+ *
+ * The user is carried over and left editable: a common user in the root usually
+ * *can* log in to a PDB, unlike the reverse, but "usually" is not a promise this
+ * function is entitled to make on someone's security model.
+ */
+export function proposePdbProfile(
+  source: ProfileConfig,
+  pdbName: string,
+  existingIds: readonly string[] = [],
+): RootProfileProposal {
+  if (source.kind === 'wallet') {
+    throw new Error(
+      'This is a wallet connection, and its connect string is a TNS alias rather than a ' +
+        'host and service. Add the connection by picking that PDB’s alias from your ' +
+        'tnsnames.ora — AuspexLens cannot derive it.',
+    );
+  }
+  const service = pdbName.trim();
+  if (service === '') throw new Error('No pluggable database name given.');
+
+  const slug = service.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return {
+    profile: {
+      ...source,
+      id: uniqueId(`${source.id}-${slug}`, existingIds),
+      label: `${stripContainerSuffix(source.label)} — ${service}`,
+      connectString: swapService(source.connectString, service),
+      user: source.user,
+    },
+    service,
+  };
+}
+
+/**
+ * Keep labels from accreting.
+ *
+ * Deriving a PDB profile from a root profile that was itself derived would
+ * otherwise produce "Sales (prod) — CDB root — SALESPDB", which reads like a
+ * path rather than a name. One hop of history is enough.
+ */
+function stripContainerSuffix(label: string): string {
+  return label.replace(/\s+—\s+CDB root$/, '');
+}
+
+/**
  * Build the root profile a PDB profile implies.
  *
  * @param source     the profile currently connected
@@ -75,15 +154,7 @@ export function proposeRootProfile(
     throw new Error('The database did not report a name to use as the root service.');
   }
 
-  const m = EASY_CONNECT.exec(source.connectString.trim());
-  if (!m?.groups) {
-    throw new Error(
-      `Could not read “${source.connectString}” as host:port/service, so there is nothing ` +
-        'to swap the service name in. Add the root connection by hand.',
-    );
-  }
-  const { host, port, rest } = m.groups;
-  const connectString = `${host}${port ? `:${port}` : ''}/${service}${rest ?? ''}`;
+  const connectString = swapService(source.connectString, service);
 
   return {
     profile: {
