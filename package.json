@@ -4,7 +4,7 @@
   "icon": "media/icon.png",
   "description": "Oracle Database client for VS Code: thin mode, no Instant Client, Autonomous Database wallets, schema explorer, PL/SQL, explain plans, and an embedded read-only MCP server.",
   "publisher": "lensql",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -77,6 +77,27 @@
         "category": "AuspexLens",
         "enablement": "auspexlens.connected",
         "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "auspexlens.toggleReadOnly",
+        "title": "Toggle read-only",
+        "category": "AuspexLens",
+        "icon": "$(lock)",
+        "enablement": "auspexlens.connected"
+      },
+      {
+        "command": "auspexlens.togglePiiMasking",
+        "title": "Toggle PII masking",
+        "category": "AuspexLens",
+        "icon": "$(eye)",
+        "enablement": "auspexlens.connected"
+      },
+      {
+        "command": "auspexlens.statusMenu",
+        "title": "Status and toggles",
+        "category": "AuspexLens",
+        "icon": "$(gear)",
+        "enablement": "auspexlens.connected"
       },
       {
         "command": "auspexlens.showContainer",
@@ -214,6 +235,11 @@
           "command": "auspexlens.importWallet",
           "when": "view == auspexlens.explorer",
           "group": "1_connection@3"
+        },
+        {
+          "command": "auspexlens.statusMenu",
+          "when": "view == auspexlens.explorer && auspexlens.connected",
+          "group": "3_state@1"
         }
       ],
       "editor/context": [
@@ -271,6 +297,18 @@
         },
         {
           "command": "auspexlens.addPdbConnection",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.toggleReadOnly",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.togglePiiMasking",
+          "when": "auspexlens.connected"
+        },
+        {
+          "command": "auspexlens.statusMenu",
           "when": "auspexlens.connected"
         }
       ],

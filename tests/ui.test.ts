@@ -19,6 +19,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
+import { hasPro, proManifest } from './monorepo';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '..');
@@ -266,15 +267,54 @@ describe('no exported capability without a way to reach it', () => {
     }
   });
 
-  it('keeps both directions free, because connections are never the paid half', () => {
+  it('keeps both directions free, because connections are never the paid half', (ctx) => {
     // The rule the root connection established: a limitation whose only exit is
     // another connection cannot have that exit behind the paywall it feeds.
-    const pro = JSON.parse(
-      readFileSync(join(ROOT, '..', 'pro', 'package.json'), 'utf8'),
-    ) as { contributes: { commands: { command: string }[] } };
-    const proIds = new Set(pro.contributes.commands.map((x) => x.command));
+    //
+    // This is a property of the PAIR, so it can only be asserted where both
+    // halves exist. In the public mirror Pro is absent by design and this skips
+    // — loudly, so "it passed" never means "it was not checked". The first
+    // version of this test read Pro's manifest unconditionally and took the
+    // mirror's CI red for three releases.
+    if (!hasPro()) {
+      // eslint-disable-next-line no-console
+      console.warn('  [monorepo] SKIPPED — packages/pro is not in this tree (public mirror).');
+      ctx.skip();
+      return;
+    }
+    const proIds = new Set(proManifest().contributes.commands.map((x) => x.command));
     for (const id of ['auspexlens.addRootConnection', 'auspexlens.addPdbConnection']) {
       expect(proIds.has(id), `${id} must not be a Pro command`).toBe(false);
     }
+  });
+});
+
+describe('the safety state is visible, not only configured', () => {
+  it('contributes a toggle for each protection the product promises', () => {
+    // Read-only and PII masking are what this product IS. Until 1.8.0 both lived
+    // only in settings.json, and a protection you cannot see is one you cannot
+    // trust — "is masking on right now?" had no answer short of opening JSON.
+    for (const id of ['auspexlens.toggleReadOnly', 'auspexlens.togglePiiMasking',
+                      'auspexlens.statusMenu']) {
+      expect(c.commands.some((x) => x.command === id), id).toBe(true);
+    }
+  });
+
+  it('creates a status bar item wired to the menu, and keeps it honest', () => {
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    expect(src).toContain('createStatusBarItem');
+    expect(src).toContain("status.command = 'auspexlens.statusMenu'");
+    // Settings change from the JSON file, another window or a sync. A bar that
+    // only refreshed on our own commands would confidently show the wrong thing.
+    expect(src).toContain('onDidChangeConfiguration');
+  });
+
+  it('warns on the way OUT of a protection, not into it', () => {
+    // Turning read-only off is the direction worth interrupting for: Oracle's own
+    // read-only transaction never stopped DDL, so with ours off nothing does
+    // except the account's privileges.
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    const toggle = src.slice(src.indexOf("'auspexlens.toggleReadOnly'"));
+    expect(toggle.slice(0, 1200)).toContain('showWarningMessage');
   });
 });

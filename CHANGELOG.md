@@ -3,6 +3,20 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.8.0] - 2026-08-25
+
+- **The safety state is now visible.** Read-only enforcement and PII masking are
+  what AuspexLens is for, and until now both lived only in `settings.json` — a
+  protection you cannot see is one you cannot trust. The status bar shows both
+  while you are connected, and clicking it changes either.
+  - Read-only **off**, or masking **off**, turns the indicator amber. Those are
+    the two states where the product is doing less than you would assume.
+  - Turning read-only off warns you, because Oracle's own read-only transaction
+    never stopped DDL: with ours off, the account's privileges are the only thing
+    left. The MCP server keeps refusing everything but reads regardless.
+  - The indicator follows the settings wherever they change from — the JSON file,
+    another window, or Settings Sync.
+
 ## [1.7.0] - 2026-08-25
 
 - **You can add a connection without editing a settings file.** Until now the

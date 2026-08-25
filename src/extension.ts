@@ -100,6 +100,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
    * to find out.
    */
   let explorerView: vscode.TreeView<TreeNode> | undefined;
+
+  /**
+   * The safety state, where a person can see it.
+   *
+   * Read-only enforcement and PII masking are what this product IS — the reason
+   * pointing a language model at a production database is defensible at all —
+   * and until 1.8.0 both lived only in `settings.json`. A protection you cannot
+   * see is one you cannot trust: the honest question "is masking on right now?"
+   * had no answer short of opening a JSON file.
+   *
+   * The status bar is where VS Code puts modal state, and the colour is the
+   * message: read-only OFF is a warning background, because that is the state
+   * where our own guard is the only thing between a careless statement and the
+   * database.
+   */
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  status.command = 'auspexlens.statusMenu';
+  context.subscriptions.push(status);
+
+  function refreshStatus(): void {
+    const readOnly = config().get<boolean>('readOnly.enabled', true);
+    const pii = config().get<'off' | 'named' | 'all'>('pii.mode', 'named');
+    const connected = connections.active() !== undefined;
+    if (!connected) {
+      status.hide();
+      return;
+    }
+    status.text = `$(${readOnly ? 'lock' : 'unlock'}) AuspexLens` +
+      `${readOnly ? '' : ' · WRITEABLE'}${pii === 'off' ? ' · PII shown' : ''}`;
+    status.tooltip =
+      `Read-only: ${readOnly ? 'on — only SELECT, WITH, EXPLAIN and DESCRIBE are sent' : 'OFF'}\n` +
+      `PII masking: ${pii}\nClick to change either.`;
+    // Two states earn the warning colour, and only these two: they are the ones
+    // where the product is doing less than a user assumes it is.
+    status.backgroundColor = (!readOnly || pii === 'off')
+      ? new vscode.ThemeColor('statusBarItem.warningBackground')
+      : undefined;
+    status.show();
+  }
   context.subscriptions.push(
     (explorerView = vscode.window.createTreeView('auspexlens.explorer', {
       treeDataProvider: treeProvider,
@@ -291,6 +330,66 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       if (choice) void vscode.commands.executeCommand('auspexlens.connect', profile.id);
     }),
 
+    vscode.commands.registerCommand('auspexlens.toggleReadOnly', async () => {
+      const now = config().get<boolean>('readOnly.enabled', true);
+      await config().update('readOnly.enabled', !now, vscode.ConfigurationTarget.Global);
+      refreshStatus();
+      if (now) {
+        // Turning it OFF is the direction worth interrupting for. Oracle's own
+        // read-only transaction never stopped DDL; with ours off, nothing does
+        // except the privileges of the account.
+        void vscode.window.showWarningMessage(
+          'Read-only is now OFF. AuspexLens will send statements that write, and Oracle’s own ' +
+            'read-only transaction does not stop DDL — the account’s privileges are the only ' +
+            'thing left. The MCP server still refuses everything but reads.',
+        );
+      } else {
+        void vscode.window.setStatusBarMessage('Read-only is on.', 2000);
+      }
+    }),
+
+    vscode.commands.registerCommand('auspexlens.togglePiiMasking', async () => {
+      // Three states, cycled in the order a person wants them: the middle one is
+      // the default and the two ends are the deliberate choices.
+      const order = ['named', 'all', 'off'] as const;
+      const now = config().get<'off' | 'named' | 'all'>('pii.mode', 'named');
+      const next = order[(order.indexOf(now) + 1) % order.length]!;
+      await config().update('pii.mode', next, vscode.ConfigurationTarget.Global);
+      refreshStatus();
+      const said = next === 'off'
+        ? 'PII masking is OFF — results, exports and the MCP server show raw values.'
+        : `PII masking: ${next === 'all' ? 'every column' : 'columns that look personal'}.`;
+      if (next === 'off') void vscode.window.showWarningMessage(said);
+      else void vscode.window.setStatusBarMessage(said, 2500);
+    }),
+
+    /**
+     * The status bar's own menu. One click from "what is on?" to changing it.
+     */
+    vscode.commands.registerCommand('auspexlens.statusMenu', async () => {
+      const readOnly = config().get<boolean>('readOnly.enabled', true);
+      const pii = config().get<'off' | 'named' | 'all'>('pii.mode', 'named');
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: `$(${readOnly ? 'lock' : 'unlock'}) Read-only: ${readOnly ? 'on' : 'OFF'}`,
+            detail: 'Toggle whether statements that write may be sent at all', value: 'ro' },
+          { label: `$(eye${pii === 'off' ? '-closed' : ''}) PII masking: ${pii}`,
+            detail: 'Cycle named → all → off', value: 'pii' },
+          { label: '$(database) Which container am I in?', value: 'container' },
+          { label: '$(gear) Manage connections', value: 'conn' },
+          { label: '$(debug-disconnect) Disconnect', value: 'disconnect' },
+        ],
+        { title: 'AuspexLens' },
+      );
+      if (!picked) return;
+      const map: Record<string, string> = {
+        ro: 'auspexlens.toggleReadOnly', pii: 'auspexlens.togglePiiMasking',
+        container: 'auspexlens.showContainer', conn: 'auspexlens.manageConnections',
+        disconnect: 'auspexlens.disconnect',
+      };
+      void vscode.commands.executeCommand(map[picked.value]!);
+    }),
+
     vscode.commands.registerCommand('auspexlens.showDocs', () =>
       vscode.env.openExternal(vscode.Uri.parse(DOCS_URL)),
     ),
@@ -393,6 +492,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
         },
       );
       await setConnected(true);
+      refreshStatus();
       treeProvider.refresh();
       vscode.window.showInformationMessage(`Connected to ${picked.profile.label}.`);
     }),
@@ -405,6 +505,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       // A stale container name over an empty tree is worse than none: it says
       // you are somewhere you are not.
       if (explorerView) explorerView.description = undefined;
+      refreshStatus();
       treeProvider.refresh();
     }),
 
@@ -643,6 +744,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       const text = res.rows.map((r) => String(r[1] ?? '')).join('');
       const doc = await vscode.workspace.openTextDocument({ content: text, language: 'plsql' });
       await vscode.window.showTextDocument(doc, { preview: false });
+    }),
+  );
+
+  // Settings can change from the JSON file, another window, or a sync. A status
+  // bar that only updates when our own commands run would confidently show the
+  // wrong thing.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('auspexlens')) refreshStatus();
     }),
   );
 
