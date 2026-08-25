@@ -3,6 +3,18 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.9.0] - 2026-08-25
+
+- **A running query can be cancelled.** It shows a progress notification while it
+  runs, and Cancel stops the statement **on the server** — not just the spinner.
+  A cancel that only stopped watching would leave the query running while you
+  believed it had stopped.
+  - Also on `Ctrl`/`Cmd`+`Alt`+`C`, in the editor's right-click menu and in the
+    palette, because a person whose editor has stopped responding reaches for
+    those rather than for a notification that may have scrolled away.
+  - Cancelling is reported as what it is. Oracle returns ORA-01013 — "user
+    requested cancel" — and showing that raw reads like a failure.
+
 ## [1.8.0] - 2026-08-25
 
 - **The safety state is now visible.** Read-only enforcement and PII masking are

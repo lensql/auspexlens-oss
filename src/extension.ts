@@ -390,6 +390,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       void vscode.commands.executeCommand(map[picked.value]!);
     }),
 
+    /**
+     * Cancel whatever is running, from the palette or a keybinding.
+     *
+     * The progress notification already offers Cancel; this exists because a
+     * person whose editor is frozen reaches for the palette, not for a toast
+     * that may have scrolled away.
+     */
+    vscode.commands.registerCommand('auspexlens.cancelQuery', async () => {
+      const conn = connections.active();
+      if (!conn?.break) {
+        void vscode.window.showWarningMessage('Nothing to cancel.');
+        return;
+      }
+      await conn.break();
+      void vscode.window.setStatusBarMessage('Cancel sent.', 2000);
+    }),
+
     vscode.commands.registerCommand('auspexlens.showDocs', () =>
       vscode.env.openExternal(vscode.Uri.parse(DOCS_URL)),
     ),
@@ -848,10 +865,28 @@ async function runFromEditor(
       return;
     }
 
-    const res = await executeReadOnly(conn, sql, {
-      maxRows: config().get<number>('results.maxRows', 5000),
-      mask: maskPolicy(),
-    });
+    // Cancellable, and cancellable for real: the progress notification's Cancel
+    // calls the driver's `break()`, which stops the statement on the server. A
+    // spinner with a Cancel that only stops watching would be worse than none —
+    // the query keeps running and the user believes it did not.
+    const res = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Running query…',
+        cancellable: true,
+      },
+      (_progress, token) => {
+        token.onCancellationRequested(() => {
+          // A no-op by the driver's own definition when nothing is running, so a
+          // cancel that arrives after the rows do is harmless.
+          void conn.break?.();
+        });
+        return executeReadOnly(conn, sql, {
+          maxRows: config().get<number>('results.maxRows', 5000),
+          mask: maskPolicy(),
+        });
+      },
+    );
 
     const panel = vscode.window.createWebviewPanel(
       'auspexlens.results', 'AuspexLens results',
@@ -871,9 +906,17 @@ async function runFromEditor(
         : undefined,
     });
   } catch (e) {
+    const message = (e as Error).message;
+    // ORA-01013 is not a failure, it is the user's own decision arriving back as
+    // an exception. Showing it raw — "user requested cancel of current
+    // operation" — reads like something went wrong.
+    if (/ORA-01013/.test(message)) {
+      void vscode.window.setStatusBarMessage('Query cancelled.', 2500);
+      return;
+    }
     // The guard's refusal is the useful message. Show it as-is: it names the
     // statement family and says why Oracle would not have stopped it.
-    vscode.window.showErrorMessage((e as Error).message);
+    vscode.window.showErrorMessage(message);
   }
 }
 

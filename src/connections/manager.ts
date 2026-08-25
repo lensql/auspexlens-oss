@@ -28,6 +28,24 @@ export interface ProfileConfig {
 export interface OracleConnection extends ReadOnlyCapableConnection {
   close(): Promise<void>;
   commit(): Promise<void>;
+  /**
+   * Interrupt whatever this connection is currently running.
+   *
+   * `break()` is node-oracledb's own, and it works in thin mode — the appendix
+   * lists statement break as supported there; what thin does NOT have is the
+   * out-of-band variant, which only matters for breaking a connection that is
+   * blocked at the network layer rather than waiting on the server.
+   *
+   * A no-op when nothing is running, by the driver's own definition, so a cancel
+   * arriving a moment late is harmless rather than an error to guard against.
+   * The interrupted statement fails with ORA-01013, which is a user action and
+   * must be reported as one.
+   *
+   * Optional because the interface is also implemented by the fakes the unit
+   * tests use, and a fake that has to grow a method every time the real one does
+   * is a fake that stops being useful.
+   */
+  break?(): Promise<void>;
 }
 
 /**

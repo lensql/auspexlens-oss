@@ -65,6 +65,7 @@ export const CAPABILITIES: readonly Capability[] = [
   { id: 'explorer.source',    tier: 'free', summary: 'Read the source of PL/SQL objects' },
   { id: 'explorer.find',      tier: 'free', summary: 'Fuzzy "find database object" across large schemas' },
   { id: 'editor.execute',     tier: 'free', summary: 'Run SQL and read the results grid' },
+  { id: 'editor.cancel',      tier: 'free', summary: 'Cancel a running query, stopping it on the server' },
   { id: 'editor.export',      tier: 'free', summary: 'Export results as CSV or JSON' },
   { id: 'plsql.run',          tier: 'free', summary: 'Run PL/SQL blocks and read compile errors from ALL_ERRORS' },
   { id: 'explain.basic',      tier: 'free', summary: 'Text explain plan (EXPLAIN PLAN + DBMS_XPLAN.DISPLAY)' },

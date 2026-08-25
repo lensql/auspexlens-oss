@@ -318,3 +318,32 @@ describe('the safety state is visible, not only configured', () => {
     expect(toggle.slice(0, 1200)).toContain('showWarningMessage');
   });
 });
+
+describe('a running query can be stopped', () => {
+  it('contributes a cancel command with a keybinding of its own', () => {
+    // A long query with no way to stop it is a frozen window, and the palette is
+    // where a person reaches when the editor stops responding.
+    expect(c.commands.some((x) => x.command === 'auspexlens.cancelQuery')).toBe(true);
+    const k = (c.keybindings ?? []).find((x) => x.command === 'auspexlens.cancelQuery');
+    expect(k, 'no keybinding for cancelQuery').toBeDefined();
+    expect(k!.when).toContain('editorTextFocus');
+  });
+
+  it('cancels on the server rather than only stopping the spinner', () => {
+    // The distinction that matters: a Cancel that only stops watching leaves the
+    // query running and the user believing it did not.
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    expect(src).toContain('onCancellationRequested');
+    expect(src).toMatch(/conn\.break\?\.\(\)/);
+    expect(src).toContain('cancellable: true');
+  });
+
+  it('reports a cancellation as a decision, not as an error', () => {
+    // ORA-01013 is the user's own choice arriving back as an exception. Shown
+    // raw it reads as something having gone wrong.
+    const src = readFileSync(join(ROOT, 'src', 'extension.ts'), 'utf8');
+    expect(src).toContain('ORA-01013');
+    const at = src.indexOf('ORA-01013');
+    expect(src.slice(at, at + 400)).toContain('Query cancelled');
+  });
+});
