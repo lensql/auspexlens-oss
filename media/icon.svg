@@ -1,7 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <circle cx="10.5" cy="10.5" r="6.5"/>
-  <line x1="15.2" y1="15.2" x2="21" y2="21"/>
-  <ellipse cx="10.5" cy="8.2" rx="3.4" ry="1.5"/>
-  <path d="M7.1 8.2v4.6c0 .9 1.5 1.6 3.4 1.6s3.4-.7 3.4-1.6V8.2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Auspex: the augur who read the signs before anyone acted. An eye, not a
+       lens — RedLens owns the magnifier, and two products from one publisher
+       must not share a silhouette in the activity bar. -->
+  <path d="M2.4 12C5.3 7.1 8.6 4.7 12 4.7s6.7 2.4 9.6 7.3c-2.9 4.9-6.2 7.3-9.6 7.3S5.3 16.9 2.4 12Z" stroke-width="1.9"/>
+  <!-- Rows of data where the iris would be. The middle one is shorter so the
+       three do not read as a hamburger menu at 24px. -->
+  <line x1="8.8" y1="9.6" x2="15.2" y2="9.6" stroke-width="1.7"/>
+  <line x1="8.8" y1="12"  x2="13.1" y2="12"  stroke-width="1.7"/>
+  <line x1="8.8" y1="14.4" x2="15.2" y2="14.4" stroke-width="1.7"/>
 </svg>

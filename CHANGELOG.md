@@ -3,6 +3,16 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.13.0] - 2026-08-25
+
+- **AuspexLens has its own icon.** Since 1.3.0 the activity bar icon had been
+  RedLens's, copied shape for shape, so two extensions from the same publisher
+  looked identical side by side. The new one is an eye with rows of data in it —
+  *auspex* was the augur who read the signs before anyone acted, and the
+  magnifying glass belongs to RedLens.
+- The Marketplace tile is drawn from the same shape, so the listing and the
+  sidebar are recognisably one product.
+
 ## [1.12.0] - 2026-08-25
 
 - **Find usages** — right-click any object in the explorer to see what

@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { hasPro, proManifest } from './monorepo';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '..');
@@ -401,5 +402,57 @@ describe('history and saved queries', () => {
     const body = src.slice(at, at + 1800);
     expect(body).toContain('openTextDocument');
     expect(body).not.toContain('executeReadOnly');
+  });
+});
+
+describe('the icon is this product\'s own', () => {
+  /**
+   * RedLens's activity bar icon, fingerprinted on 2026-08-25.
+   *
+   * A constant rather than a read of the sibling checkout, and that is the whole
+   * reason this test is worth having: the gate runs on the Mac Lab, where only
+   * this repository is synced. A cross-repo read would skip there — every time —
+   * and a test that always skips protects nothing. That lesson has now been paid
+   * for twice in one session.
+   *
+   * It is a snapshot, and says so. If RedLens redraws its icon this constant goes
+   * stale, but the risk it guards is copying the icon that exists today.
+   */
+  const REDLENS_SHAPES_SHA = '8f0e71fa51d27735';
+
+  /** The shapes, normalised — stroke widths differ without the drawing differing. */
+  function shapeFingerprint(svg: string): string {
+    const shapes = [...svg.matchAll(/<(path|circle|ellipse|line|rect|polygon|polyline)\b[^>]*>/g)]
+      .map((m) => m[0].replace(/\s+/g, ' ').replace(/stroke-width="[^"]*"/, ''));
+    return createHash('sha256').update(shapes.join('|')).digest('hex').slice(0, 16);
+  }
+
+  it('does not copy the sibling product\'s icon', () => {
+    // Not hypothetical: 1.3.0 through 1.11.0 shipped RedLens's icon.svg verbatim
+    // — the same four shapes, differing only in a line break — so two products
+    // from one publisher were indistinguishable in the activity bar. Diego
+    // spotted it. No test could, because every icon assertion until now was
+    // about the file's own properties rather than about it being anyone's own.
+    const mine = readFileSync(join(ROOT, c.viewsContainers.activitybar[0]!.icon), 'utf8');
+    expect(shapeFingerprint(mine), "the icon is RedLens's, shape for shape")
+      .not.toBe(REDLENS_SHAPES_SHA);
+  });
+
+  it('draws something, rather than being an empty canvas', () => {
+    const svg = readFileSync(join(ROOT, c.viewsContainers.activitybar[0]!.icon), 'utf8');
+    const shapes = [...svg.matchAll(/<(path|circle|ellipse|line|rect|polygon)\b/g)];
+    expect(shapes.length, 'the icon has no shapes in it').toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps the Marketplace tile light and opaque', () => {
+    // 8-bit RGB without alpha, the shape RedLens ships. The one before it was
+    // 16-bit RGBA at 19.8 KB to draw what 2 KB draws.
+    const png = readFileSync(join(ROOT, manifest.icon));
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const depth = png[24]!;
+    const colourType = png[25]!;
+    expect(depth, 'the tile is not 8-bit').toBe(8);
+    expect(colourType, 'the tile carries an alpha channel').toBe(2);
+    expect(png.length, 'the tile is heavier than it needs to be').toBeLessThan(20_000);
   });
 });
