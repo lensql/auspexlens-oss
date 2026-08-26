@@ -3,6 +3,17 @@
 All notable changes to this package. The Marketplace renders this file as the
 extension's Changelog tab, so the newest entry always goes on top.
 
+## [1.14.0] - 2026-08-26
+
+- **Group and chart results.** Pick a column and see how many rows sit behind
+  each of its values, as a bar chart with the full list underneath — the chart
+  shows the twenty largest, the table shows them all.
+- Like transposing, it re-renders rows already fetched: no second query.
+- **The chart is SVG drawn before the page is written, not a script.** The
+  results view runs with no `script-src` at all, which is part of what makes
+  pointing a language model at this extension defensible. A bar chart is
+  rectangles and text, so it did not need to be traded for.
+
 ## [1.13.0] - 2026-08-25
 
 - **AuspexLens has its own icon.** Since 1.3.0 the activity bar icon had been

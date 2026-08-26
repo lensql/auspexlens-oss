@@ -60,7 +60,7 @@ export function transpose(
   };
 }
 
-export function renderGrid(input: GridInput): string {
+export function renderGrid(input: GridInput & { chartSvg?: string }): string {
   const { columns, rows, maskedColumns, cspSource } = input;
 
   const head = columns
@@ -103,6 +103,10 @@ ${cspMetaTag({ cspSource })}
   .summary { padding: 6px 10px; color: var(--vscode-descriptionForeground);
              border-bottom: 1px solid var(--vscode-panel-border); position: sticky; top: 0;
              background: var(--vscode-editor-background); }
+  .chart { display: block; margin: 10px; max-width: calc(100% - 20px); }
+  .chart .bar { fill: var(--vscode-charts-blue, #4a9eff); }
+  .chart .lbl { fill: var(--vscode-foreground); font-size: 12px; }
+  .chart .val { fill: var(--vscode-descriptionForeground); font-size: 12px; }
   .note { padding: 6px 10px; color: var(--vscode-inputValidation-warningForeground);
           background: var(--vscode-inputValidation-warningBackground); }
   table { border-collapse: collapse; width: 100%; }
@@ -117,7 +121,86 @@ ${cspMetaTag({ cspSource })}
 <body>
 <div class="summary">${escapeHtml(summary)}</div>
 ${input.note ? `<div class="note">${escapeHtml(input.note)}</div>` : ''}
+${input.chartSvg ?? ''}
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
 </body>
 </html>`;
+}
+
+/**
+ * Count the rows behind each distinct value of one column.
+ *
+ * The cheapest useful question about a result — "how many of each?" — and one a
+ * person otherwise re-runs the query to answer. Like `transpose`, it works on
+ * rows already fetched: no second statement, and nothing new reaches the
+ * database.
+ *
+ * Sorted by count and then by label, so the answer is stable between runs. Ties
+ * broken alphabetically rather than left in whatever order the rows arrived,
+ * because a list that reshuffles under you is one you have to read twice.
+ */
+export function groupBy(
+  columns: readonly string[],
+  rows: readonly unknown[][],
+  columnIndex: number,
+): { columns: string[]; rows: unknown[][] } {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const raw = row[columnIndex];
+    // NULL is a value people group by, and it is not the empty string.
+    const key = raw === null || raw === undefined ? 'NULL' : String(raw);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const name = columns[columnIndex] ?? 'Value';
+  return {
+    columns: [name, 'Rows'],
+    rows: [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([k, n]) => [k, n]),
+  };
+}
+
+/** One bar of a chart: a label and the number behind it. */
+export interface Bar { label: string; value: number }
+
+/**
+ * A bar chart as static SVG, drawn here rather than in the webview.
+ *
+ * This is the case that decides whether the no-scripts results view survives.
+ * RedLens charts with `enableScripts: true`; this view has **no `script-src` at
+ * all**, which the threat model names as a control (T15), and a chart is the
+ * feature most likely to be used as the reason to give that up. It does not have
+ * to be: a bar chart is rectangles and text, and SVG draws both without running
+ * anything.
+ *
+ * Everything user-derived — labels, and the numbers in the axis — goes through
+ * `escapeHtml`, exactly as the table does. An SVG in an HTML document is parsed
+ * as markup, so a label containing `<` is the same hazard here as in a `<td>`.
+ */
+export function barChartSvg(bars: readonly Bar[], opts: { width?: number } = {}): string {
+  const width = opts.width ?? 720;
+  const rowHeight = 26;
+  const labelWidth = 180;
+  const gutter = 12;
+  const max = bars.reduce((m, b) => Math.max(m, b.value), 0);
+  const height = Math.max(rowHeight, bars.length * rowHeight) + gutter;
+  const barArea = Math.max(40, width - labelWidth - 90);
+
+  const rows = bars.map((b, i) => {
+    const y = i * rowHeight + gutter / 2;
+    // A zero-length bar is still a row: dividing by a max of zero is not, so the
+    // guard is on the divisor rather than on the value.
+    const w = max > 0 ? Math.round((b.value / max) * barArea) : 0;
+    const label = escapeHtml(b.label.length > 28 ? `${b.label.slice(0, 27)}…` : b.label);
+    return (
+      `<text x="0" y="${y + 16}" class="lbl">${label}</text>` +
+      `<rect x="${labelWidth}" y="${y + 5}" width="${w}" height="14" rx="2" class="bar"/>` +
+      `<text x="${labelWidth + w + 6}" y="${y + 16}" class="val">${escapeHtml(b.value)}</text>`
+    );
+  }).join('');
+
+  return (
+    `<svg class="chart" viewBox="0 0 ${width} ${height}" width="100%" height="${height}" ` +
+    `role="img" aria-label="Bar chart of ${escapeHtml(bars.length)} values">${rows}</svg>`
+  );
 }

@@ -27,7 +27,7 @@ import {
   childrenQuery, folderNodes, schemaNodes, objectNodes, columnNodes, sourceQueryFor,
   type TreeNode,
 } from './explorer/tree';
-import { renderGrid, transpose } from './grid/render';
+import { renderGrid, transpose, groupBy, barChartSvg } from './grid/render';
 import { startBridge, type BridgeHandle } from './mcp/bridgeServer';
 import { PRODUCT_TAGLINE, PRO_EXTENSION_ID, DOCS_URL } from './branding';
 import { CAPABILITIES } from './licensing/tiers';
@@ -575,6 +575,50 @@ export async function activate(context: vscode.ExtensionContext): Promise<Auspex
       } catch (e) {
         void vscode.window.showWarningMessage((e as Error).message);
       }
+    }),
+
+    /**
+     * Count the rows behind each value of one column, and chart it.
+     *
+     * Both are re-renders of what was already fetched, and both are drawn on this
+     * side: the results view has no `script-src` at all (threat model T15), and a
+     * chart is the feature most likely to be offered as the reason to give that
+     * up. It does not have to be — a bar chart is rectangles and text.
+     */
+    vscode.commands.registerCommand('auspexlens.groupResults', async () => {
+      if (!lastResult) {
+        void vscode.window.showInformationMessage('Run a query first — there is nothing to group.');
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        lastResult.columns.map((name, index) => ({ label: name, index })),
+        { title: 'Group the last result by which column?' },
+      );
+      if (!picked) return;
+
+      const g = groupBy(lastResult.columns, lastResult.rows, picked.index);
+      if (g.rows.length === 0) {
+        void vscode.window.showInformationMessage('The last result had no rows to group.');
+        return;
+      }
+      const panel = vscode.window.createWebviewPanel(
+        'auspexlens.results', `AuspexLens results (by ${picked.label})`,
+        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+        { enableScripts: false },
+      );
+      // The chart shows the top slice; the table underneath is complete, so
+      // nothing is hidden by the picture.
+      const bars = g.rows.slice(0, 20).map((r) => ({ label: String(r[0]), value: Number(r[1]) }));
+      panel.webview.html = renderGrid({
+        columns: g.columns,
+        rows: g.rows,
+        maskedColumns: [],
+        cspSource: panel.webview.cspSource,
+        chartSvg: barChartSvg(bars),
+        note: g.rows.length > bars.length
+          ? `Charting the ${bars.length} largest of ${g.rows.length} groups; the table lists them all.`
+          : undefined,
+      });
     }),
 
     vscode.commands.registerCommand('auspexlens.showDocs', () =>

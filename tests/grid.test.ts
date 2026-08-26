@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { renderGrid, transpose, TRANSPOSE_LIMIT } from '../src/grid/render';
+import { renderGrid, transpose, TRANSPOSE_LIMIT, groupBy, barChartSvg } from '../src/grid/render';
 
 const base = { maskedColumns: [], cspSource: 'vscode-resource:' };
 
@@ -111,5 +111,73 @@ describe('transposing a wide result', () => {
     // reaches the database, and the no-scripts webview keeps its CSP.
     const src = readFileSync(join(__dirname, '..', 'src', 'grid', 'render.ts'), 'utf8');
     expect(src).not.toMatch(/executeReadOnly|conn\./);
+  });
+});
+
+describe('grouping, on rows already fetched', () => {
+  const columns = ['STATUS', 'AMOUNT'];
+  const rows = [['OPEN', 1], ['SHUT', 2], ['OPEN', 3], [null, 4], ['OPEN', 5]];
+
+  it('counts the rows behind each distinct value', () => {
+    const g = groupBy(columns, rows, 0);
+    expect(g.columns).toEqual(['STATUS', 'Rows']);
+    expect(g.rows).toEqual([['OPEN', 3], ['NULL', 1], ['SHUT', 1]]);
+  });
+
+  it('treats NULL as a value people group by, not as an empty string', () => {
+    expect(groupBy(['A'], [[null], ['']], 0).rows).toEqual([['', 1], ['NULL', 1]]);
+  });
+
+  it('breaks ties alphabetically so the answer is stable between runs', () => {
+    // A list that reshuffles under you is one you have to read twice.
+    const g = groupBy(['A'], [['b'], ['a'], ['c']], 0);
+    expect(g.rows.map((r) => r[0])).toEqual(['a', 'b', 'c']);
+  });
+
+  it('handles an empty result without inventing a row', () => {
+    expect(groupBy(columns, [], 0).rows).toEqual([]);
+  });
+});
+
+describe('the bar chart is SVG, not a script', () => {
+  const bars = [{ label: 'OPEN', value: 3 }, { label: 'SHUT', value: 1 }];
+
+  it('draws rectangles and text, and runs nothing', () => {
+    // The feature most likely to be used as the reason to enable scripts in the
+    // results view. It does not have to be: a bar chart is rectangles and text.
+    const svg = barChartSvg(bars);
+    expect(svg).toContain('<rect');
+    expect(svg).toContain('<text');
+    expect(svg.toLowerCase()).not.toContain('<script');
+    expect(svg.toLowerCase()).not.toContain('onload');
+  });
+
+  it('escapes labels, because SVG in an HTML document is markup too', () => {
+    const svg = barChartSvg([{ label: '<img src=x onerror=1>', value: 1 }]);
+    expect(svg).not.toContain('<img');
+    expect(svg).toContain('&lt;img');
+  });
+
+  it('scales the longest bar to the full width and the rest against it', () => {
+    const svg = barChartSvg([{ label: 'a', value: 10 }, { label: 'b', value: 5 }]);
+    const widths = [...svg.matchAll(/<rect[^>]*width="(\d+)"/g)].map((m) => Number(m[1]));
+    expect(widths[0]).toBeGreaterThan(0);
+    expect(widths[1]).toBe(Math.round(widths[0]! / 2));
+  });
+
+  it('survives every value being zero rather than dividing by it', () => {
+    const svg = barChartSvg([{ label: 'a', value: 0 }, { label: 'b', value: 0 }]);
+    expect(svg).toContain('<rect');
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('truncates a long label instead of overrunning the labels column', () => {
+    const svg = barChartSvg([{ label: 'x'.repeat(60), value: 1 }]);
+    expect(svg).toContain('…');
+  });
+
+  it('carries an accessible name', () => {
+    expect(barChartSvg(bars)).toContain('role="img"');
+    expect(barChartSvg(bars)).toContain('aria-label');
   });
 });
